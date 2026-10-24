@@ -14,10 +14,13 @@
 - `src/proxy.ts` barra quem não tem sessão; a autorização definitiva é refeita **no servidor** em cada página, ação e rota (`requireUser` / `authorize`).
 - Perfis e permissões em `src/lib/permissions.ts` (matriz visível em *Equipe e permissões*).
 - Toda consulta filtra por `org_id`. No Supabase, o mesmo isolamento é garantido também pelo banco com **Row Level Security** (`supabase/migrations`), testado em `supabase/tests/rls-test.sql`:
-  - usuário só enxerga a própria organização; inserções em outra organização são bloqueadas;
-  - atendente vê apenas conversas próprias ou sem responsável e não exclui clientes;
-  - auditoria: todos registram, só administradores leem, ninguém altera ou apaga (gatilho "somente-inclusão");
-  - o banco recusa destinatário de campanha sem opt-in.
+  - usuário só enxerga a própria organização; chaves estrangeiras compostas impedem ligar dados de organizações diferentes;
+  - privilégios por coluna (o acesso amplo padrão do Supabase é revogado; `anon` não acessa nada);
+  - atendente vê apenas conversas próprias ou sem responsável e não exclui clientes nem oportunidades;
+  - auditoria: cada um registra só as próprias ações (sem escolher data/hora), só administradores leem, ninguém altera ou apaga — nem o servidor;
+  - consentimento: o status do cliente muda apenas pelo histórico, registrado em nome de quem está logado; histórico permanente;
+  - o banco recusa destinatário de campanha sem opt-in; aprovação de modelos e envio real só pelo servidor;
+  - a organização nunca fica sem administrador; a primeira organização é criada por função de uso único (ver `docs/SUPABASE.md`).
 
 ## Proteção de credenciais
 

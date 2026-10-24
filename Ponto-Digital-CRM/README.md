@@ -98,7 +98,7 @@ npm run demo:reset && npm run dev   # em um terminal
 node scripts/e2e.cjs "<senha admin>" "<senha equipe>" "$PWD"   # em outro
 ```
 
-Teste do banco (isolamento por organização / RLS), num PostgreSQL local:
+Teste do banco (isolamento por organização / RLS — 58 verificações), num PostgreSQL 15+ local:
 
 ```bash
 createdb pdcrm_test && psql -d pdcrm_test -f supabase/tests/rls-test.sql
@@ -145,6 +145,6 @@ Detalhes em [docs/SEGURANCA_LGPD.md](docs/SEGURANCA_LGPD.md) e [docs/WHATSAPP_CO
 ## Próximas etapas
 
 1. **Sua aprovação desta primeira versão.**
-2. **Supabase**: criar o projeto (plano gratuito disponível), aplicar `supabase/migrations`, trocar `DATA_BACKEND` para `supabase` e ligar o Supabase Auth (e-mails de recuperação). Preciso que você crie o projeto e me passe a URL e as chaves pelo `.env.local` — nunca por mensagem.
+2. **Supabase**: criar o projeto e aplicar o esquema seguindo [docs/SUPABASE.md](docs/SUPABASE.md), trocar `DATA_BACKEND` para `supabase` e ligar o Supabase Auth (e-mails de recuperação). Preciso que você crie o projeto e me passe a URL e as chaves pelo `.env.local` — nunca por mensagem.
 3. **Hospedagem** (ex.: Vercel) com domínio HTTPS — só com sua autorização, pois publica o sistema.
 4. **WhatsApp oficial com coexistência** — ver o plano em `docs/WHATSAPP_COEXISTENCIA.md`. Nenhuma alteração no seu número sem a sua aprovação.
