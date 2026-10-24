@@ -55,15 +55,19 @@ Para usar a versão otimizada (mais rápida): `npm run build` e depois `npm star
 
 ### Webpack ou Turbopack
 
-O Tailwind CSS 4 é processado pelo PostCSS (`postcss.config.mjs` + `@tailwindcss/postcss`), então o visual é o mesmo nos dois empacotadores do Next.js 16:
-
 ```bash
 npm run dev           # Turbopack (padrão)
-npm run dev:webpack   # Webpack — alternativa se o Turbopack der problema (ex.: alguns ambientes Windows)
+npm run dev:webpack   # Webpack
 npm run build:webpack # build de produção com Webpack
 ```
 
-Se a página aparecer sem estilo (logo gigante, layout desmontado), apague a pasta `.next` e rode `npm install` novamente.
+### CSS pré-compilado (Windows com Controle de Aplicativo)
+
+O CSS do Tailwind 4 vem **já compilado** em `src/app/globals.css`, versionado no Git. Assim o CRM roda sem carregar o compilador nativo do Tailwind (`tailwindcss-oxide…node`), que políticas de Controle de Aplicativo do Windows podem bloquear (`ERR_DLOPEN_FAILED`). Não há `postcss.config` de propósito.
+
+- **Para usar o CRM:** nada a fazer — `git pull` já traz o CSS atualizado.
+- **Para alterar o visual:** edite `src/styles/tailwind.source.css` (cores e estilos) ou as classes nos componentes e rode `npm run css:build` em um computador onde o Tailwind nativo funcione (Linux, macOS ou ambiente na nuvem). Não edite `src/app/globals.css` à mão.
+- `npm test` inclui uma verificação (`npm run css:check`) que falha se o CSS estiver desatualizado; ela é pulada automaticamente onde o Tailwind nativo estiver bloqueado.
 
 ### Recuperação de senha no modo demonstração
 
