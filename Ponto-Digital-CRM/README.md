@@ -53,6 +53,18 @@ Usuários da equipe de demonstração: `lucas@` (gestor), `ana@` e `pedro@` (ate
 
 Para usar a versão otimizada (mais rápida): `npm run build` e depois `npm start`.
 
+### Webpack ou Turbopack
+
+O Tailwind CSS 4 é processado pelo PostCSS (`postcss.config.mjs` + `@tailwindcss/postcss`), então o visual é o mesmo nos dois empacotadores do Next.js 16:
+
+```bash
+npm run dev           # Turbopack (padrão)
+npm run dev:webpack   # Webpack — alternativa se o Turbopack der problema (ex.: alguns ambientes Windows)
+npm run build:webpack # build de produção com Webpack
+```
+
+Se a página aparecer sem estilo (logo gigante, layout desmontado), apague a pasta `.next` e rode `npm install` novamente.
+
 ### Recuperação de senha no modo demonstração
 
 Como ainda não há envio de e-mail, o link de redefinição aparece no terminal onde o sistema está rodando e no arquivo `.data/outbox.log`. Com o Supabase, o e-mail passa a ser enviado de verdade.
