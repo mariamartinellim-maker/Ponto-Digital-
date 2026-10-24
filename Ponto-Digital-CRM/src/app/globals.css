@@ -1,0 +1,71 @@
+@import "tailwindcss";
+
+/* Identidade visual Ponto Digital: violeta elétrico + coral (o "ponto"), base tinta-escura. */
+@theme {
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  --color-brand-50: #f3f1ff;
+  --color-brand-100: #e9e5ff;
+  --color-brand-200: #d4ccff;
+  --color-brand-300: #b4a6ff;
+  --color-brand-400: #9079ff;
+  --color-brand-500: #6e4ff6;
+  --color-brand-600: #5a3be4;
+  --color-brand-700: #4a2fc0;
+  --color-brand-800: #3a2697;
+  --color-brand-900: #281b66;
+
+  --color-coral-50: #fff3f0;
+  --color-coral-100: #ffe3db;
+  --color-coral-400: #ff8a6e;
+  --color-coral-500: #ff6b4a;
+  --color-coral-600: #e9502f;
+
+  --color-ink-700: #2a2f4f;
+  --color-ink-800: #1a1e38;
+  --color-ink-900: #11142a;
+  --color-ink-950: #0a0c1c;
+
+  --color-surface: #f5f6fb;
+  --color-line: #e6e8f0;
+
+  --shadow-card: 0 1px 2px rgb(16 24 40 / 0.04), 0 1px 3px rgb(16 24 40 / 0.06);
+  --shadow-pop: 0 12px 32px -8px rgb(16 24 40 / 0.18), 0 4px 8px -4px rgb(16 24 40 / 0.08);
+}
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  background: var(--color-surface);
+  color: #0f172a;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-feature-settings: "cv11", "ss01";
+}
+
+::selection {
+  background: var(--color-brand-200);
+}
+
+.brand-gradient {
+  background-image: linear-gradient(135deg, var(--color-brand-500) 0%, #8b5cf6 55%, var(--color-coral-500) 120%);
+}
+
+.scroll-thin {
+  scrollbar-width: thin;
+  scrollbar-color: #cfd3e1 transparent;
+}
+
+@media (display-mode: standalone) {
+  body {
+    padding-top: env(safe-area-inset-top);
+  }
+}

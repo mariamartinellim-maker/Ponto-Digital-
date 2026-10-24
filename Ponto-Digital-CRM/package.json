@@ -1,0 +1,44 @@
+{
+  "name": "ponto-digital-crm",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "setup": "node scripts/setup.mjs",
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "demo:reset": "node -e \"require('fs').rmSync('.data/demo-db.json',{force:true});console.log('Base demo será recriada no próximo acesso.')\""
+  },
+  "dependencies": {
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "^2.118.0",
+    "clsx": "^2.1.1",
+    "geist": "^1.8.2",
+    "lucide-react": "^1.61.0",
+    "next": "16.4.3",
+    "papaparse": "^5.7.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "recharts": "^3.10.1",
+    "server-only": "^0.0.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@tailwindcss/turbopack": "^4",
+    "@types/node": "^22.20.5",
+    "@types/papaparse": "^5.5.2",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.4.3",
+    "tailwindcss": "^4",
+    "typescript": "^5",
+    "vitest": "^5.0.5"
+  },
+  "engines": {
+    "node": ">=20.9"
+  }
+}
