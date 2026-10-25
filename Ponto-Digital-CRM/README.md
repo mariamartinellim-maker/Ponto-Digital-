@@ -53,6 +53,10 @@ Usuários da equipe de demonstração: `lucas@` (gestor), `ana@` e `pedro@` (ate
 
 Para usar a versão otimizada (mais rápida): `npm run build` e depois `npm start`.
 
+### Atualizar no Windows (instalação por ZIP)
+
+Dê dois cliques em **`ATUALIZAR-CRM.cmd`** na pasta do CRM. O atualizador faz backup completo (Área de Trabalho → `Backups-Ponto-CRM`), baixa a versão nova, atualiza os arquivos **sem tocar em `.env.local` nem em `.data`** (conferidos por hash), instala as dependências e oferece conectar o Supabase e iniciar o CRM. Pode ser executado quantas vezes quiser.
+
 ### Webpack ou Turbopack
 
 ```bash
