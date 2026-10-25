@@ -1,9 +1,10 @@
-import { isSupabase, supabaseServer } from "@/lib/supabase/server";
+import { isSupabase } from "@/lib/supabase/server";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Check, CheckCheck, Clock, FileText, History, Paperclip, Smartphone, Sparkles, TriangleAlert } from "lucide-react";
 import { env } from "@/lib/env";
-import { Avatar, Badge, Button, cn, Select } from "@/components/ui";
+import { loadKnowledge } from "@/lib/ai/knowledge";
+import { Avatar, Badge, Button, buttonClass, cn, Select } from "@/components/ui";
 import { ConsentBadge } from "@/components/ui/labels";
 import { requireUser } from "@/lib/auth/session";
 import { scoped } from "@/lib/data/repo";
@@ -29,13 +30,14 @@ const ORIGIN: Partial<Record<Message["origin"], { label: string; icon: typeof Sm
 function MediaView({ m, out }: { m: Message; out: boolean }) {
   const media = m.media;
   if (!media) return null;
-  const src = `/api/whatsapp/midia/${m.id}`;
+  // Arquivos da biblioteca (WhatsApp Web e envios a partir da biblioteca) ficam no armazenamento do CRM.
+  const src = media.assetId ? `/api/biblioteca/${media.assetId}` : `/api/whatsapp/midia/${m.id}`;
   const chip = (label: string) => (
     <span className={cn("mb-1 flex items-center gap-1.5 rounded-lg px-2 py-1 text-[12.5px]", out ? "bg-white/15" : "bg-slate-100 text-slate-600")}>
       <Paperclip className="size-3.5 shrink-0" /> {label}
     </span>
   );
-  if (!media.id) return chip(media.simulated ? `${media.filename ?? "arquivo"} (envio simulado)` : "Mídia não disponível (histórico antigo)");
+  if (!media.id && !media.assetId) return chip(media.simulated ? `${media.filename ?? "arquivo"} (envio simulado)` : "Mídia não disponível (histórico antigo)");
   if (media.type === "image" || media.type === "sticker") {
     // eslint-disable-next-line @next/next/no-img-element
     return <img src={src} alt={media.caption || "Imagem recebida"} loading="lazy" className="mb-1 max-h-72 rounded-xl object-contain" />;
@@ -79,11 +81,7 @@ export default async function ConversationPage({
   const remainingH = conv.lastInboundAt ? Math.max(0, Math.ceil((WINDOW_MS - (requestTime() - new Date(conv.lastInboundAt).getTime())) / 3600_000)) : 0;
   const canReply = can(user.role, "inbox:reply");
   const canAssign = can(user.role, "inbox:assign");
-  let aiEnabled = false;
-  if (isSupabase() && env().ANTHROPIC_API_KEY && can(user.role, "ai:use")) {
-    const { data: kb } = await (await supabaseServer()).from("ai_knowledge").select("enabled").maybeSingle();
-    aiEnabled = kb?.enabled === true;
-  }
+  const aiEnabled = Boolean(env().ANTHROPIC_API_KEY) && can(user.role, "ai:use") && (await loadKnowledge(user.orgId))?.enabled === true;
 
   return (
     <InboxShell user={user} activeId={id} filter={f} q={q}>
@@ -118,6 +116,9 @@ export default async function ConversationPage({
             </form>
           ) : (
             <Badge>Responsável: {conv.assigneeId ? users.get(conv.assigneeId) : "—"}</Badge>
+          )}
+          {can(user.role, "sales:manage") && (
+            <Link href={`/vendas?cliente=${client.id}&conversa=${id}`} className={buttonClass("outline", "sm")}>Registrar venda</Link>
           )}
           {canReply && (
             <form action={updateConversationAction}>
@@ -175,7 +176,7 @@ export default async function ConversationPage({
                     )}
                   >
                     <MediaView m={m} out={out} />
-                    {m.media?.id && /^\[(imagem|áudio|vídeo|documento|figurinha)\]/.test(m.body) ? m.body.replace(/^\[[^\]]+\]\s?/, "") : m.body}
+                    {(m.media?.id || m.media?.assetId) && /^\[(imagem|áudio|vídeo|documento|figurinha)\]/.test(m.body) ? m.body.replace(/^\[[^\]]+\]\s?/, "") : m.body}
                     <span className={cn("ml-2 inline-flex translate-y-0.5 items-center gap-1 text-[10.5px]", out ? "text-white/70" : "text-slate-400")}>
                       {formatTime(m.createdAt)}
                       {out && <StatusIcon status={m.status} />}

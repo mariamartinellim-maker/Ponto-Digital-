@@ -5,7 +5,9 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import {
   CalendarCheck,
+  Factory,
   LayoutDashboard,
+  Library,
   LogOut,
   Megaphone,
   Menu,
@@ -13,10 +15,13 @@ import {
   MessagesSquare,
   QrCode,
   ScrollText,
+  ShieldCheck,
+  ShoppingBag,
   Sparkles,
   SquareKanban,
   UserCog,
   Users,
+  Wallet,
   Webhook,
   X,
 } from "lucide-react";
@@ -33,11 +38,16 @@ const NAV: { href: string; label: string; icon: typeof Users; perm?: Permission;
   { href: "/agenda", label: "Agenda", icon: CalendarCheck },
   { href: "/campanhas", label: "Campanhas", icon: Megaphone, perm: "campaigns:read" },
   { href: "/modelos", label: "Modelos e respostas", icon: MessageSquareText },
+  { href: "/biblioteca", label: "Biblioteca de mídias", icon: Library, perm: "media:read" },
+  { href: "/vendas", label: "Vendas", icon: ShoppingBag, perm: "sales:manage" },
+  { href: "/financeiro", label: "Financeiro", icon: Wallet, perm: "finance:manage" },
+  { href: "/producao", label: "Produção", icon: Factory, perm: "production:manage" },
   { href: "/ia", label: "Assistente de IA", icon: Sparkles, perm: "ai:manage" },
 ];
 const ADMIN: typeof NAV = [
   { href: "/equipe", label: "Equipe e permissões", icon: UserCog, perm: "users:manage" },
   { href: "/auditoria", label: "Auditoria", icon: ScrollText, perm: "audit:read" },
+  { href: "/guardian", label: "Guardian", icon: ShieldCheck, perm: "guardian:manage" },
   { href: "/configuracoes/whatsapp", label: "WhatsApp Business", icon: Webhook, perm: "settings:manage" },
   { href: "/configuracoes/whatsapp-web", label: "WhatsApp Web (teste)", icon: QrCode, perm: "settings:manage" },
 ];
