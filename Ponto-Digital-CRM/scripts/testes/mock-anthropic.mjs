@@ -43,7 +43,7 @@ http
       const body = JSON.parse(raw || "{}");
       // Arquivos em base64 não entram no registro (só o tipo e o tamanho).
       const slim = JSON.parse(JSON.stringify(body), (k, v) => (k === "data" && typeof v === "string" && v.length > 200 ? `[base64 ${v.length}]` : v));
-      log.push({ headers: { beta: req.headers["anthropic-beta"], key: req.headers["x-api-key"] ? "presente" : "ausente" }, body: slim });
+      log.push({ headers: { beta: req.headers["anthropic-beta"], key: req.headers["x-api-key"] || req.headers.authorization ? "presente" : "ausente" }, body: slim });
       const content = body.messages?.at(-1)?.content;
       // Leitura de comprovante: a mensagem traz a imagem/PDF em base64.
       const isFile = Array.isArray(content) && content.some((b) => b.type === "image" || b.type === "document");

@@ -16,7 +16,12 @@ CRM da agência **Ponto Digital**: clientes, funil comercial, atendimento pelo W
 | **Funil comercial** | Novo Lead → Em Atendimento → Proposta Enviada → Fechado / Perdido. Arrastar e soltar no computador; seletor de etapa no celular. |
 | **Atendimento** | Caixa de entrada por cliente, histórico completo, responsável, transferência, **rodízio automático**, status (aberta/pendente/resolvida), origem (CRM, **app WhatsApp Business**, histórico sincronizado, campanha), **janela de 24h** da Meta, imagens, áudios, vídeos e documentos. |
 | **WhatsApp Web (experimental)** | Conexão por QR Code **não oficial**, só para chips de teste, somente recebimento, desligada por padrão — ver [docs/WHATSAPP_WEB_EXPERIMENTAL.md](docs/WHATSAPP_WEB_EXPERIMENTAL.md). |
-| **Assistente de IA** | Base de conhecimento da agência (serviços, preços, portfólio, tom) e sugestões de resposta que a equipe revisa antes de enviar. |
+| **Assistente de IA** | Base de conhecimento da agência (serviços, preços, portfólio, tom) e sugestões de resposta que a equipe revisa antes de enviar (também no modo demonstração). |
+| **Biblioteca de mídias** | Áudios, imagens, vídeos e PDFs da equipe e os recebidos pelo WhatsApp Web; tipo conferido pelo conteúdo do arquivo; uso em conversas (envio simulado nesta fase). |
+| **Vendas** | Venda registrada a partir da conversa ou do cliente; nasce “aguardando pagamento”; só o Financeiro dá baixa. |
+| **Financeiro e comprovantes** | A IA lê o comprovante (valor, data, pagador, ID da transação); uma pessoa confere, vincula à venda sugerida e confirma. Bloqueia comprovantes repetidos. Lançamentos não são editados: correções viram estornos. |
+| **Produção** | Ordem criada automaticamente quando o pagamento é confirmado, com checklist pelos itens vendidos, etapas e responsável. |
+| **Guardian** | Monitoramento a cada minuto, registro de falhas, reconexão segura do WhatsApp Web, backups automáticos da base demo com restauração validada e `/api/health`. |
 | **Respostas rápidas e modelos** | Atalhos com `/` na conversa. Modelos (templates) com categoria, variáveis `{{1}}` e status de aprovação. |
 | **Campanhas** | Segmentação por cidade, serviço, etapa e etiqueta; **apenas contatos com consentimento**; descadastrados sempre excluídos; somente modelos aprovados; acompanhamento de entregas, leituras, respostas e descadastros. |
 | **Descadastro** | Mensagens "SAIR", "PARAR", "STOP" descadastram automaticamente e ficam registradas. |
@@ -109,6 +114,14 @@ Teste do banco (isolamento por organização / RLS — 58 verificações; Fase 2
 ```bash
 createdb pdcrm_test && psql -d pdcrm_test -f supabase/tests/rls-test.sql
 createdb pdcrm_f2 && psql -d pdcrm_f2 -f supabase/tests/fase2-test.sql
+```
+
+Módulos operacionais (vendas, comprovantes, financeiro, produção, Guardian):
+
+```bash
+createdb pdcrm_op && psql -d pdcrm_op -f supabase/tests/operacao-test.sql      # RLS: 41 verificações
+POSTGREST_BIN=/caminho/postgrest bash scripts/testes/supabase-rest.sh          # fluxo completo no modo Supabase (PostgreSQL + PostgREST locais)
+node scripts/testes/e2e-operacao.cjs "<senha admin>" "<senha equipe>"           # atendimento → venda → comprovante → financeiro → produção (instruções no arquivo)
 ```
 
 Teste ponta a ponta da Fase 2 (54 cenários) com simuladores locais da Meta e da Anthropic — nunca aponta para o WhatsApp ou a IA reais: `scripts/testes/e2e-fase2.cjs` (instruções no cabeçalho do arquivo).

@@ -226,7 +226,8 @@ export async function monitorTick() {
     const r = await startWaWeb(ws.orgId);
     if (r.error) await recordEvent("erro", "waweb", `Reconexão automática falhou: ${r.error}`, ws.orgId);
   }
-  // Backup automático da base demo a cada 6 h.
+  // Backup automático da base demo a cada 6 h (contando também os backups de antes do reinício).
+  if (!isSupabase() && !st.lastBackup) st.lastBackup = new Date((await listBackups())[0]?.at ?? 0).getTime();
   if (!isSupabase() && Date.now() - st.lastBackup > 6 * 3600_000) {
     st.lastBackup = Date.now();
     await createBackup("auto").catch((err) => recordEvent("erro", "backup", `Backup automático falhou: ${(err as Error).message}`));
