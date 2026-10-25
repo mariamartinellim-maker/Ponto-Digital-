@@ -18,18 +18,18 @@ Cada etapa é testada antes de ir ao ar. Itens marcados com 🔒 dependem da sua
 | Anonimização LGPD | indisponível no Supabase | B |
 | Mensagens recebidas do WhatsApp (webhook) | indisponível no Supabase | C |
 
-## Etapa A — Publicação na Vercel (atual)
-Ver [PUBLICACAO.md](PUBLICACAO.md). Código pronto e testado; falta a sua autorização para levar à `main` e os cliques na Vercel. 🔒 (publicação e plano Pro)
+## Etapa A — Publicação no Render (atual)
+Ver [PUBLICACAO.md](PUBLICACAO.md) (inclui a comparação de custos). Código pronto e testado; falta o merge do Pull Request na `main` e os cliques no Render. 🔒 (publicação e plano Starter, US$ 7/mês)
 
 ## Etapa B — Concluir os módulos em somente leitura
 - **Agenda, respostas rápidas, modelos e campanhas (simulação):** gravação pelo Supabase com a sessão do usuário — o banco já tem as permissões e o RLS prontos (sem chave secreta).
 - **Anonimização LGPD:** função segura no banco (`security definer`) executável só por administradores: anonimiza o cadastro e apaga as conversas, preservando o histórico de consentimento.
-- **Equipe:** convite por e-mail pelo próprio CRM (Supabase Auth). Exige a **chave secreta** do Supabase **somente no servidor** (variável criptografada na Vercel, nunca no navegador nem no seu computador), usada apenas nessa função, restrita a administradores e registrada na auditoria.
+- **Equipe:** convite por e-mail pelo próprio CRM (Supabase Auth). Exige a **chave secreta** do Supabase **somente no servidor** (variável secreta no Render, nunca no navegador nem no seu computador), usada apenas nessa função, restrita a administradores e registrada na auditoria.
 
 ## Etapa C — WhatsApp oficial (Cloud API) com coexistência
 Plano detalhado em [WHATSAPP_COEXISTENCIA.md](WHATSAPP_COEXISTENCIA.md). Resumo:
 1. Confirmar com um **Parceiro de Soluções/Tech Provider da Meta** se o seu número atual do WhatsApp Business pode usar **coexistência** (app no celular + Cloud API no mesmo número) e os custos envolvidos. 🔒
-2. Webhook publicado na Vercel (precisa de HTTPS — por isso a Etapa A vem antes), com validação de assinatura já implementada; gravação das mensagens recebidas no Supabase por função segura usada apenas pelo servidor.
+2. Webhook publicado no Render (precisa de HTTPS — por isso a Etapa A vem antes), com validação de assinatura já implementada; gravação das mensagens recebidas no Supabase por função segura usada apenas pelo servidor.
 3. Onboarding por QR Code no próprio app WhatsApp Business, escolhendo se o histórico é sincronizado. 🔒 (altera a configuração do seu número — só você executa)
 4. Testes com números internos da equipe; depois liberar respostas reais; campanhas por último. 🔒
 - Custos da Meta: cobrança por modelo (template) enviado conforme a tabela vigente; respostas dentro da janela de 24h após a mensagem do cliente não têm custo de modelo. Valores confirmados antes de ativar.

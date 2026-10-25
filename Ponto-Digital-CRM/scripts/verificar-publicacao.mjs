@@ -1,6 +1,6 @@
 // Verificação de segurança de um CRM publicado (ou do servidor local de produção).
 //
-//   npm run verificar:publicacao -- https://SEU-ENDERECO.vercel.app
+//   npm run verificar:publicacao -- https://SEU-ENDERECO.onrender.com
 //
 // Só faz leituras anônimas: não envia senhas nem altera nada. Se houver .env.local com o
 // Supabase, também confere no banco real que visitantes anônimos não leem dados.
@@ -8,7 +8,7 @@ import { existsSync, readFileSync } from "node:fs";
 
 const base = (process.argv[2] ?? "").replace(/\/+$/, "");
 if (!/^https?:\/\/[^/]+$/.test(base)) {
-  console.error("Uso: npm run verificar:publicacao -- https://SEU-ENDERECO.vercel.app");
+  console.error("Uso: npm run verificar:publicacao -- https://SEU-ENDERECO.onrender.com");
   process.exit(1);
 }
 const https = base.startsWith("https://");

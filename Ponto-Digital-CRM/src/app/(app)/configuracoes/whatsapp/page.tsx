@@ -54,7 +54,7 @@ export default async function WhatsAppSettingsPage() {
             <div>
               <p className="text-[13px] text-slate-500">URL de callback</p>
               <code className="mt-1 block break-all rounded-lg bg-slate-50 px-3 py-2 text-[13px]">{webhookUrl}</code>
-              <p className="mt-1 text-xs text-slate-500">Em produção precisa ser HTTPS público (ex.: domínio na Vercel).</p>
+              <p className="mt-1 text-xs text-slate-500">Em produção precisa ser HTTPS público (ex.: endereço no Render).</p>
             </div>
             <ul className="divide-y divide-line">
               <Item ok={w.hasVerifyToken} label="Token de verificação (WHATSAPP_VERIFY_TOKEN)" hint="Usado no handshake GET de cadastro do webhook." />

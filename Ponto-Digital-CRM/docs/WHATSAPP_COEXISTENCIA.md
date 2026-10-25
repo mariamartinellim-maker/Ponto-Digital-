@@ -40,7 +40,7 @@ Objetivo: conectar o **número que você já usa no aplicativo WhatsApp Business
 
 1. **Elegibilidade** — conferir com um parceiro compatível se o seu número pode usar coexistência e quais os custos (a Meta cobra por conversa/mensagem conforme a categoria; o parceiro pode ter mensalidade). 🔒 *Contratar parceiro gera custo: só com sua autorização.*
 2. **Meta for Developers** — você cria (ou nós orientamos) o app do tipo Business e a conta WhatsApp Business (WABA) no seu Business Manager. Nenhuma alteração no número.
-3. **Publicar o CRM em HTTPS** (ex.: Vercel) — a Meta só entrega webhooks para endereço público. 🔒 *Publicação: só com sua autorização.*
+3. **Publicar o CRM em HTTPS** (ex.: Render) — a Meta só entrega webhooks para endereço público. 🔒 *Publicação: só com sua autorização.*
 4. **Cadastrar segredos** no painel da hospedagem: `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_ACCESS_TOKEN` (token de usuário do sistema), `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_WABA_ID`. Nunca no código nem em mensagens.
 5. **Cadastrar o webhook** no app da Meta: URL `https://SEU-DOMINIO/api/webhooks/whatsapp`, token de verificação, e assinar `messages`, `smb_message_echoes`, `history`, `smb_app_state_sync`.
 6. **Onboarding com coexistência** — você escaneia o QR Code no app WhatsApp Business e escolhe se compartilha o histórico. 🔒 *Altera a configuração do seu número: só você executa, com a sua aprovação.*

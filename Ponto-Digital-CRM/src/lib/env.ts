@@ -10,8 +10,11 @@ const schema = z.object({
   DATA_BACKEND: z.enum(["demo", "supabase"]).default("demo"),
   // Sessão do modo demonstração (no modo Supabase quem cuida da sessão é o Supabase Auth).
   SESSION_SECRET: z.string().min(32, "SESSION_SECRET precisa ter ao menos 32 caracteres.").optional(),
-  // Definida automaticamente pela Vercel ("1") — indica que o CRM está publicado.
+  // Indicam que o CRM está publicado: VERCEL ("1") e RENDER ("true") são definidas pelos
+  // provedores; CRM_PUBLICADO=true serve para qualquer outra hospedagem.
   VERCEL: z.string().optional(),
+  RENDER: z.string().optional(),
+  CRM_PUBLICADO: z.string().optional(),
   APP_URL: z.string().url().default("http://localhost:3000"),
   DEMO_ADMIN_EMAIL: z.string().email().default("admin@pontodigital.demo"),
   DEMO_ADMIN_PASSWORD: z.string().min(10).optional(),
@@ -52,13 +55,13 @@ export function env(): Env {
   if (parsed.data.DATA_BACKEND === "demo" && !parsed.data.SESSION_SECRET) {
     throw new Error("SESSION_SECRET não definido. Rode `npm run setup` para gerar o .env.local.");
   }
-  if (parsed.data.VERCEL) {
+  if (isPublished(parsed.data)) {
     // Publicado na internet: nunca em modo demonstração e sempre com endereço HTTPS.
     if (parsed.data.DATA_BACKEND !== "supabase") {
-      throw new Error("Publicação bloqueada: na Vercel defina DATA_BACKEND=supabase (o modo demonstração é só para uso local).");
+      throw new Error("Publicação bloqueada: na hospedagem defina DATA_BACKEND=supabase (o modo demonstração é só para uso local).");
     }
     if (!parsed.data.APP_URL.startsWith("https://")) {
-      throw new Error("Publicação bloqueada: APP_URL precisa ser o endereço HTTPS do CRM (ex.: https://ponto-crm.vercel.app).");
+      throw new Error("Publicação bloqueada: APP_URL precisa ser o endereço HTTPS do CRM (ex.: https://ponto-digital-crm.onrender.com).");
     }
   }
   if (parsed.data.DATA_BACKEND === "supabase") {
@@ -73,6 +76,10 @@ export function env(): Env {
   }
   cached = parsed.data;
   return cached;
+}
+
+function isPublished(e: Pick<Env, "VERCEL" | "RENDER" | "CRM_PUBLICADO">) {
+  return Boolean(e.VERCEL) || e.RENDER === "true" || e.CRM_PUBLICADO === "true";
 }
 
 /** Detecta a chave secreta do Supabase (nova "sb_secret_" ou JWT legado com role service_role). */

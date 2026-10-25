@@ -15,7 +15,7 @@ describe("proteção contra uso da chave secreta do Supabase", () => {
   });
 });
 
-describe("travas de publicação na Vercel", () => {
+describe("travas de publicação (Vercel, Render ou CRM_PUBLICADO)", () => {
   const original = { ...process.env };
   const loadEnv = async (vars: Record<string, string>) => {
     vi.resetModules();
@@ -40,6 +40,14 @@ describe("travas de publicação na Vercel", () => {
   });
   it("aceita a configuração correta, sem SESSION_SECRET", async () => {
     const env = await loadEnv({ VERCEL: "1", DATA_BACKEND: "supabase", APP_URL: "https://crm.vercel.app", SUPABASE_URL: "https://x.supabase.co", SUPABASE_PUBLISHABLE_KEY: "sb_publishable_abcdefghijklmnopqrstuv", SESSION_SECRET: "" });
+    expect(env().DATA_BACKEND).toBe("supabase");
+  });
+  it.each<Record<string, string>>([{ RENDER: "true" }, { CRM_PUBLICADO: "true" }])("também bloqueia o modo demonstração em %o", async (host) => {
+    const env = await loadEnv({ ...host, DATA_BACKEND: "demo", SESSION_SECRET: "x".repeat(40), APP_URL: "https://crm.onrender.com" });
+    expect(() => env()).toThrow(/DATA_BACKEND=supabase/);
+  });
+  it("aceita a configuração correta no Render", async () => {
+    const env = await loadEnv({ RENDER: "true", DATA_BACKEND: "supabase", APP_URL: "https://crm.onrender.com", SUPABASE_URL: "https://x.supabase.co", SUPABASE_PUBLISHABLE_KEY: "sb_publishable_abcdefghijklmnopqrstuv" });
     expect(env().DATA_BACKEND).toBe("supabase");
   });
 });
