@@ -44,13 +44,13 @@ Deixe a janela aberta: você vai copiar `SUPABASE_URL` e `SUPABASE_PUBLISHABLE_K
 ### 3. Criar o serviço no Render 🔒 (gera cobrança de US$ 7/mês)
 1. Acesse https://render.com e entre com **GitHub**. Ative a verificação em duas etapas (*Account Settings*).
 2. **New → Blueprint** → autorize o Render a ver o repositório `Ponto-Digital-` → selecione-o.
-3. O Render lê o `render.yaml` e mostra o serviço **ponto-digital-crm (Starter)**. Ele pede 3 valores:
+3. O Render lê o `render.yaml` e mostra o serviço **ponto-digital-crm** no plano **Starter** (código `0.5c-512mb`: 0,5 CPU e 512 MB). Ele pede 3 valores:
    - `SUPABASE_URL` e `SUPABASE_PUBLISHABLE_KEY`: cole do passo 2;
    - `APP_URL`: `https://ponto-digital-crm.onrender.com`.
 4. Cadastre o cartão quando pedido e clique em **Deploy Blueprint**. A primeira publicação leva uns 5 minutos.
 5. Confira o endereço mostrado no topo do serviço. Se for diferente de `https://ponto-digital-crm.onrender.com` (quando o nome já existe, o Render acrescenta letras), atualize `APP_URL` em **Environment** com o endereço exato e salve (o Render republica sozinho).
 
-> Alternativa sem Blueprint: **New → Web Service**, repositório `Ponto-Digital-`, *Root Directory* `Ponto-Digital-CRM`, *Build Command* `npm ci && npm run build`, *Start Command* `npm start`, plano **Starter**, e em **Environment → Add from .env** cole o bloco do `npm run publicacao:env` (troque o APP_URL e acrescente `NODE_VERSION=22`).
+> Alternativa sem Blueprint: **New → Web Service**, repositório `Ponto-Digital-`, *Root Directory* `Ponto-Digital-CRM`, *Build Command* `npm ci --include=dev && npm run build`, *Start Command* `npm start`, plano **Starter**, e em **Environment → Add from .env** cole o bloco do `npm run publicacao:env` (troque o APP_URL e acrescente `NODE_VERSION=22`).
 
 ### 4. Ajustar o Supabase para o endereço publicado
 Em **Authentication → URL Configuration**:
@@ -66,7 +66,7 @@ Tudo deve aparecer com ✔. Depois, entre com seu e-mail e senha pelo navegador 
 
 ## Outras hospedagens
 - **Vercel:** importe o repositório com *Root Directory* `Ponto-Digital-CRM` e cole o bloco do `npm run publicacao:env` em *Environment Variables*. Para uso comercial exige o plano Pro.
-- **Qualquer outra (Railway, Fly.io…):** Node.js 22, `npm ci && npm run build`, `npm start`, pasta `Ponto-Digital-CRM` e as mesmas variáveis (incluindo `CRM_PUBLICADO=true`).
+- **Qualquer outra (Railway, Fly.io…):** Node.js 22, `npm ci --include=dev && npm run build`, `npm start`, pasta `Ponto-Digital-CRM` e as mesmas variáveis (incluindo `CRM_PUBLICADO=true`).
 
 ## Recomendações de segurança (sem custo)
 - Ative a **verificação em duas etapas** nas contas do GitHub, Render e Supabase.

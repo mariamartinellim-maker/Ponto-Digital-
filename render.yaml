@@ -8,11 +8,11 @@ services:
   - type: web
     name: ponto-digital-crm
     runtime: node
-    plan: starter # US$ 7/mês: sempre ligado (necessário para os webhooks do WhatsApp)
+    plan: 0.5c-512mb # Starter (0,5 CPU, 512 MB), US$ 7/mês: sempre ligado (necessário para os webhooks do WhatsApp)
     region: virginia # região dos EUA mais próxima do Brasil
     branch: main
     rootDir: Ponto-Digital-CRM
-    buildCommand: npm ci && npm run build
+    buildCommand: npm ci --include=dev && npm run build
     startCommand: npm start
     healthCheckPath: /login
     autoDeployTrigger: commit
