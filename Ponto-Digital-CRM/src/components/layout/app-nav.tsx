@@ -11,6 +11,7 @@ import {
   Menu,
   MessageSquareText,
   MessagesSquare,
+  QrCode,
   ScrollText,
   Sparkles,
   SquareKanban,
@@ -38,6 +39,7 @@ const ADMIN: typeof NAV = [
   { href: "/equipe", label: "Equipe e permissões", icon: UserCog, perm: "users:manage" },
   { href: "/auditoria", label: "Auditoria", icon: ScrollText, perm: "audit:read" },
   { href: "/configuracoes/whatsapp", label: "WhatsApp Business", icon: Webhook, perm: "settings:manage" },
+  { href: "/configuracoes/whatsapp-web", label: "WhatsApp Web (teste)", icon: QrCode, perm: "settings:manage" },
 ];
 
 export interface NavUser {

@@ -99,8 +99,9 @@ export default async function WhatsAppSettingsPage() {
       />
       <div className="mb-6">
         <Notice tone="brand" title="Seu número e suas conversas estão preservados">
-          O CRM usa somente a conexão oficial da Meta em coexistência: o WhatsApp Business continua no seu celular e nada é migrado. Não usamos
-          APIs não oficiais nem automações de WhatsApp Web. A conexão só acontece quando um administrador clica no botão e você escaneia o QR Code no app.
+          Esta integração usa somente a conexão oficial da Meta em coexistência: o WhatsApp Business continua no seu celular e nada é migrado. A conexão só
+          acontece quando um administrador clica no botão e você escaneia o QR Code no app. O módulo experimental de WhatsApp Web (não oficial) fica separado,
+          em outra tela, desligado por padrão e restrito a chips de teste.
         </Notice>
       </div>
 

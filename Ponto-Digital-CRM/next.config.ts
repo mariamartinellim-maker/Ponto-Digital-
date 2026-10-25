@@ -42,6 +42,8 @@ const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
   poweredByHeader: false,
+  // Biblioteca do WhatsApp Web experimental: carregada pelo Node, sem empacotar (usa WebAssembly e módulos nativos do Node).
+  serverExternalPackages: ["baileys"],
   async headers() {
     return [
       { source: "/:path*", headers: securityHeaders },

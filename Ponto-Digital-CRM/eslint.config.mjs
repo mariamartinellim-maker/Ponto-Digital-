@@ -13,6 +13,8 @@ const eslintConfig = defineConfig([
       "src/lib/whatsapp/client.ts",
       "src/lib/whatsapp/ingest.ts",
       "src/lib/whatsapp/templates.ts",
+      "src/lib/whatsapp-web/auth-state.ts",
+      "src/lib/whatsapp-web/manager.ts",
       "src/app/api/webhooks/whatsapp/route.ts",
       "src/app/(app)/configuracoes/whatsapp/**",
       "src/app/(app)/equipe/actions.ts",

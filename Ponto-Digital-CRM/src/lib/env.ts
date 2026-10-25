@@ -49,6 +49,24 @@ const schema = z.object({
   WHATSAPP_APP_SECRET: z.string().optional(),
   WHATSAPP_VERIFY_TOKEN: z.string().optional(),
 
+  // WhatsApp Web por QR Code — MÓDULO EXPERIMENTAL, não oficial (ver docs/WHATSAPP_WEB_EXPERIMENTAL.md).
+  // Desligado por padrão; só vincula os chips de teste listados e nunca envia mensagens.
+  WAWEB_HABILITADO: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((v) => v === "true"),
+  // Chips de teste que podem ser vinculados pelo QR Code. Qualquer outro número é desconectado na hora.
+  WAWEB_NUMEROS_PERMITIDOS: z.string().default(""),
+  // Contatos cujas mensagens entram no CRM (vazio = os números de WHATSAPP_NUMEROS_TESTE). Os demais são ignorados.
+  WAWEB_CONTATOS_TESTE: z.string().default(""),
+  // Criptografa a sessão do WhatsApp Web guardada no banco (32 bytes em base64; gere com: npm run whatsapp:chave).
+  WAWEB_SESSION_KEY: z.string().optional(),
+  // Simulador local para testes automatizados (nunca na hospedagem).
+  WAWEB_SIMULADOR: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((v) => v === "true"),
+
   // Inteligência artificial (Claude, da Anthropic). Sem a chave, a IA fica desligada.
   ANTHROPIC_API_KEY: z.string().optional(),
   AI_MODEL: z.string().regex(/^claude-[a-z0-9-]+$/, "AI_MODEL inválido.").default("claude-opus-5-5"),
@@ -83,9 +101,15 @@ export function env(): Env {
     if (new URL(parsed.data.WHATSAPP_GRAPH_BASE).origin !== "https://graph.facebook.com") {
       throw new Error("Publicação bloqueada: WHATSAPP_GRAPH_BASE só pode ser a API oficial (https://graph.facebook.com).");
     }
+    if (parsed.data.WAWEB_SIMULADOR) {
+      throw new Error("Publicação bloqueada: WAWEB_SIMULADOR é só para testes locais.");
+    }
     if (parsed.data.WHATSAPP_SEND_MODE === "live" && !parsed.data.WHATSAPP_APP_SECRET) {
       throw new Error("Envio real exige WHATSAPP_APP_SECRET (validação da assinatura dos webhooks da Meta).");
     }
+  }
+  if (parsed.data.WAWEB_SESSION_KEY && Buffer.from(parsed.data.WAWEB_SESSION_KEY, "base64").length !== 32) {
+    throw new Error("WAWEB_SESSION_KEY precisa ter 32 bytes em base64 (gere com: npm run whatsapp:chave).");
   }
   if (parsed.data.WHATSAPP_TOKEN_KEY && Buffer.from(parsed.data.WHATSAPP_TOKEN_KEY, "base64").length !== 32) {
     throw new Error("WHATSAPP_TOKEN_KEY precisa ter 32 bytes em base64 (gere com: npm run whatsapp:chave).");

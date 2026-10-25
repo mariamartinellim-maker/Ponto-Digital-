@@ -15,6 +15,7 @@ CRM da agência **Ponto Digital**: clientes, funil comercial, atendimento pelo W
 | **Importação CSV** | Aceita `,` ou `;`, reconhece colunas em português, padroniza telefones e **elimina duplicidades** (no arquivo e na base, inclusive números com/sem o nono dígito). Prévia antes de importar. |
 | **Funil comercial** | Novo Lead → Em Atendimento → Proposta Enviada → Fechado / Perdido. Arrastar e soltar no computador; seletor de etapa no celular. |
 | **Atendimento** | Caixa de entrada por cliente, histórico completo, responsável, transferência, **rodízio automático**, status (aberta/pendente/resolvida), origem (CRM, **app WhatsApp Business**, histórico sincronizado, campanha), **janela de 24h** da Meta, imagens, áudios, vídeos e documentos. |
+| **WhatsApp Web (experimental)** | Conexão por QR Code **não oficial**, só para chips de teste, somente recebimento, desligada por padrão — ver [docs/WHATSAPP_WEB_EXPERIMENTAL.md](docs/WHATSAPP_WEB_EXPERIMENTAL.md). |
 | **Assistente de IA** | Base de conhecimento da agência (serviços, preços, portfólio, tom) e sugestões de resposta que a equipe revisa antes de enviar. |
 | **Respostas rápidas e modelos** | Atalhos com `/` na conversa. Modelos (templates) com categoria, variáveis `{{1}}` e status de aprovação. |
 | **Campanhas** | Segmentação por cidade, serviço, etapa e etiqueta; **apenas contatos com consentimento**; descadastrados sempre excluídos; somente modelos aprovados; acompanhamento de entregas, leituras, respostas e descadastros. |
