@@ -58,6 +58,7 @@ const toUser = (r: Row): PublicUser => ({
   email: str(r.email),
   role: r.role as PublicUser["role"],
   active: Boolean(r.active),
+  inRotation: r.in_rotation === true,
   createdAt: str(r.created_at),
   lastLoginAt: strOrNull(r.last_login_at),
 });
@@ -118,6 +119,9 @@ const toMessage = (r: Row): Message => ({
   waMessageId: strOrNull(r.wa_message_id),
   authorId: strOrNull(r.author_id),
   createdAt: str(r.created_at),
+  media: r.media && typeof r.media === "object" ? (r.media as Message["media"]) : null,
+  aiAssisted: r.ai_assisted === true,
+  error: strOrNull(r.error),
 });
 
 const toTemplate = (r: Row): MessageTemplate => ({

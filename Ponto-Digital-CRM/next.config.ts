@@ -3,19 +3,29 @@ import type { NextConfig } from "next";
 const isDev = process.env.NODE_ENV !== "production";
 
 // Content Security Policy: bloqueia scripts/conexões de terceiros. Ajustar ao incluir novos domínios.
-const csp = [
-  "default-src 'self'",
-  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob:",
-  "font-src 'self' data:",
-  `connect-src 'self'${isDev ? " ws: wss:" : ""}`,
-  "frame-ancestors 'none'",
-  "base-uri 'self'",
-  "form-action 'self'",
-  "object-src 'none'",
-  ...(isDev ? [] : ["upgrade-insecure-requests"]),
-].join("; ");
+const cspWith = (extra: { script?: string; connect?: string; frame?: string; img?: string } = {}) =>
+  [
+    "default-src 'self'",
+    `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}${extra.script ? " " + extra.script : ""}`,
+    "style-src 'self' 'unsafe-inline'",
+    `img-src 'self' data: blob:${extra.img ? " " + extra.img : ""}`,
+    "font-src 'self' data:",
+    `connect-src 'self'${isDev ? " ws: wss:" : ""}${extra.connect ? " " + extra.connect : ""}`,
+    `frame-src ${extra.frame ?? "'none'"}`,
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "object-src 'none'",
+    ...(isDev ? [] : ["upgrade-insecure-requests"]),
+  ].join("; ");
+const csp = cspWith();
+// Somente na página de conexão do WhatsApp: SDK oficial da Meta (Embedded Signup / coexistência).
+const cspMeta = cspWith({
+  script: "https://connect.facebook.net",
+  connect: "https://*.facebook.com https://graph.facebook.com",
+  frame: "https://*.facebook.com",
+  img: "https://*.facebook.com https://*.fbcdn.net",
+});
 
 const securityHeaders = [
   { key: "Content-Security-Policy", value: csp },
@@ -35,6 +45,8 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       { source: "/:path*", headers: securityHeaders },
+      // Regra posterior com a mesma chave prevalece (documentação do next.config headers).
+      { source: "/configuracoes/whatsapp", headers: [{ key: "Content-Security-Policy", value: cspMeta }] },
       { source: "/sw.js", headers: [{ key: "Cache-Control", value: "no-cache" }, { key: "Service-Worker-Allowed", value: "/" }] },
     ];
   },

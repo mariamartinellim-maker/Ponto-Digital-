@@ -7,9 +7,6 @@ import { env } from "../env";
 
 export const isSupabase = () => env().DATA_BACKEND === "supabase";
 
-export const SUPABASE_PROXIMA_ETAPA =
-  "Este módulo ainda está em modo leitura no Supabase. A gravação será liberada na próxima etapa da integração.";
-
 /**
  * Cliente Supabase do servidor, autenticado com a sessão do usuário (cookies).
  * Usa somente a chave publicável: toda leitura/escrita passa pelo RLS do banco.

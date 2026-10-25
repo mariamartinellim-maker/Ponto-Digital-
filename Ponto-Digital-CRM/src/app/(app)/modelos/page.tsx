@@ -1,4 +1,3 @@
-import { ReadOnlyNotice } from "@/components/layout/demo-banner";
 import { Trash2, Zap } from "lucide-react";
 import { Badge, Button, Card, CardHeader, Field, Input, Notice, PageHeader, Select, Textarea } from "@/components/ui";
 import { ActionForm } from "@/components/ui/action-form";
@@ -7,7 +6,8 @@ import { scoped } from "@/lib/data/repo";
 import type { TemplateStatus } from "@/lib/data/types";
 import { formatDate } from "@/lib/format";
 import { can } from "@/lib/permissions";
-import { deleteQuickReplyAction, saveQuickReplyAction, saveTemplateAction, simulateTemplateReviewAction } from "./actions";
+import { isSupabase } from "@/lib/supabase/server";
+import { deleteQuickReplyAction, saveQuickReplyAction, saveTemplateAction, simulateTemplateReviewAction, submitTemplateToMetaAction, syncTemplatesAction } from "./actions";
 
 export const metadata = { title: "Modelos e respostas" };
 export const instant = false;
@@ -23,6 +23,7 @@ export default async function TemplatesPage() {
   const d = await scoped(user.orgId);
   const canQR = can(user.role, "quick_replies:manage");
   const canTpl = can(user.role, "templates:manage");
+  const real = isSupabase();
 
   return (
     <>
@@ -30,7 +31,6 @@ export default async function TemplatesPage() {
         title="Modelos e respostas rápidas"
         description="Respostas rápidas agilizam o atendimento. Modelos (templates) aprovados pela Meta são obrigatórios para campanhas e para retomar conversas após 24h."
       />
-      <ReadOnlyNotice />
       <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-2">
         <Card>
           <CardHeader title={<span className="flex items-center gap-2"><Zap className="size-4 text-coral-500" /> Respostas rápidas</span>} description="Digite / na conversa para inserir." />
@@ -68,7 +68,15 @@ export default async function TemplatesPage() {
         </Card>
 
         <Card>
-          <CardHeader title="Modelos de mensagem (WhatsApp)" description="Idioma pt_BR · variáveis no formato {{1}}, {{2}}" />
+          <CardHeader
+            title="Modelos de mensagem (WhatsApp)"
+            description="Idioma pt_BR · variáveis no formato {{1}}, {{2}}"
+            action={real && canTpl ? (
+              <ActionForm action={syncTemplatesAction} submitLabel="Sincronizar com a Meta" success="Status atualizados com a Meta." className="flex items-center gap-2">
+                <span />
+              </ActionForm>
+            ) : undefined}
+          />
           <ul className="divide-y divide-line">
             {d.templates.map((t) => (
               <li key={t.id} className="px-5 py-3.5">
@@ -79,7 +87,17 @@ export default async function TemplatesPage() {
                   <span className="ml-auto text-xs text-slate-400">{formatDate(t.createdAt)}</span>
                 </div>
                 <p className="mt-1.5 whitespace-pre-wrap text-[13px] text-slate-600">{t.body}</p>
-                {canTpl && t.status === "PENDING" && (
+                {real && t.metaTemplateId && t.status === "PENDING" && <p className="mt-2 text-xs text-amber-700">Enviado à Meta · aguardando análise</p>}
+                {real && t.status === "REJECTED" && <p className="mt-2 text-xs text-red-600">A Meta rejeitou este modelo. Ajuste o texto e crie um novo com outro nome.</p>}
+                {real && canTpl && !t.metaTemplateId && (
+                  <div className="mt-2">
+                    <ActionForm action={submitTemplateToMetaAction} submitLabel="Enviar para análise da Meta" success="Enviado. A Meta costuma responder em minutos." className="flex flex-wrap items-center gap-2">
+                      <input type="hidden" name="id" value={t.id} />
+                      <span className="text-xs text-slate-500">Ainda não enviado à Meta (gratuito; não envia mensagem a clientes).</span>
+                    </ActionForm>
+                  </div>
+                )}
+                {!real && canTpl && t.status === "PENDING" && (
                   <form action={simulateTemplateReviewAction} className="mt-2 flex items-center gap-2">
                     <input type="hidden" name="id" value={t.id} />
                     <span className="text-xs text-amber-700">Demonstração:</span>
@@ -93,8 +111,12 @@ export default async function TemplatesPage() {
           {canTpl && (
             <div className="border-t border-line bg-slate-50/60 p-5">
               <p className="mb-3 text-sm font-semibold">Novo modelo</p>
-              <ActionForm action={saveTemplateAction} submitLabel="Enviar para aprovação" success="Modelo criado como “Em análise”.">
-                <Notice tone="brand">Nesta versão o envio para a Meta é simulado. Na integração oficial, o modelo é submetido à Meta e o status é atualizado automaticamente.</Notice>
+              <ActionForm action={saveTemplateAction} submitLabel="Salvar modelo" success="Modelo salvo. Envie-o para análise da Meta na lista acima.">
+                <Notice tone="brand">
+                  {real
+                    ? "O modelo é salvo no CRM e depois enviado para análise da Meta pelo botão “Enviar para análise”. O status (aprovado/rejeitado) chega automaticamente."
+                    : "No modo demonstração a análise da Meta é simulada."}
+                </Notice>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_170px]">
                   <Field label="Nome (identificador)" htmlFor="tpl-name"><Input id="tpl-name" name="name" placeholder="ex.: promocao_natal" required /></Field>
                   <Field label="Categoria" htmlFor="category">

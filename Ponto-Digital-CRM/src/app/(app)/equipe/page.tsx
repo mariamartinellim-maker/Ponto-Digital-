@@ -1,5 +1,4 @@
-import { ReadOnlyNotice } from "@/components/layout/demo-banner";
-import { Check, Minus } from "lucide-react";
+import { Check, Minus, Shuffle } from "lucide-react";
 import { Avatar, Badge, Button, Card, CardHeader, Field, Input, PageHeader, Select } from "@/components/ui";
 import { ActionForm } from "@/components/ui/action-form";
 import { requireUser } from "@/lib/auth/session";
@@ -7,7 +6,8 @@ import { scoped } from "@/lib/data/repo";
 import type { Role } from "@/lib/data/types";
 import { formatDateTime } from "@/lib/format";
 import { PERMISSIONS, ROLE_LABELS, ROLE_PERMISSIONS, type Permission } from "@/lib/permissions";
-import { createUserAction, resetUserPasswordAction, updateUserAction } from "./actions";
+import { isSupabase, supabaseServer } from "@/lib/supabase/server";
+import { createUserAction, resetUserPasswordAction, setDistributionAction, updateUserAction } from "./actions";
 
 export const metadata = { title: "Equipe e permissões" };
 export const instant = false;
@@ -17,11 +17,16 @@ const ROLES = Object.keys(ROLE_LABELS) as Role[];
 export default async function TeamPage() {
   const user = await requireUser("users:manage");
   const d = await scoped(user.orgId);
+  const real = isSupabase();
+  let distribution = "manual";
+  if (real) {
+    const { data } = await (await supabaseServer()).from("organizations").select("wa_distribution").eq("id", user.orgId).maybeSingle();
+    distribution = String(data?.wa_distribution ?? "manual");
+  }
 
   return (
     <>
       <PageHeader title="Equipe e permissões" description="Crie acessos individuais para cada pessoa da equipe. Nunca compartilhe logins." />
-      <ReadOnlyNotice />
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_360px]">
         <Card>
           <CardHeader title="Usuários" description={`${d.users.filter((u) => u.active).length} ativos`} />
@@ -35,6 +40,7 @@ export default async function TeamPage() {
                       {u.name}
                       {u.id === user.id && <Badge tone="brand">Você</Badge>}
                       {!u.active && <Badge tone="red">Desativado</Badge>}
+                      {u.inRotation && u.active && <Badge tone="sky">No rodízio</Badge>}
                     </p>
                     <p className="truncate text-xs text-slate-500">{u.email} · último acesso {u.lastLoginAt ? formatDateTime(u.lastLoginAt) : "nunca"}</p>
                   </div>
@@ -53,7 +59,16 @@ export default async function TeamPage() {
                     <input type="hidden" name="op" value="toggle" />
                     <Button size="sm" variant={u.active ? "ghost" : "secondary"} disabled={u.id === user.id}>{u.active ? "Desativar" : "Reativar"}</Button>
                   </form>
-                  <ActionForm action={resetUserPasswordAction} submitLabel="Nova senha" className="contents">
+                  {real && (
+                    <form action={updateUserAction}>
+                      <input type="hidden" name="id" value={u.id} />
+                      <input type="hidden" name="op" value="rotation" />
+                      <Button size="sm" variant="ghost" disabled={!u.active} title="Participar do rodízio de novos atendimentos do WhatsApp">
+                        {u.inRotation ? "Tirar do rodízio" : "Incluir no rodízio"}
+                      </Button>
+                    </form>
+                  )}
+                  <ActionForm action={resetUserPasswordAction} submitLabel={real ? "Enviar link de senha" : "Nova senha"} className="contents">
                     <input type="hidden" name="id" value={u.id} />
                   </ActionForm>
                 </div>
@@ -62,10 +77,27 @@ export default async function TeamPage() {
           </ul>
         </Card>
 
-        <Card className="xl:self-start">
-          <CardHeader title="Adicionar pessoa" />
+        <div className="space-y-6 xl:self-start">
+        {real && (
+          <Card>
+            <CardHeader title={<span className="flex items-center gap-2"><Shuffle className="size-4 text-brand-600" /> Novos atendimentos</span>} description="Quem recebe as conversas novas que chegam pelo WhatsApp." />
+            <form action={setDistributionAction} className="space-y-3 p-5 text-sm">
+              <label className="flex items-start gap-2">
+                <input type="radio" name="mode" value="manual" defaultChecked={distribution === "manual"} className="mt-1 accent-brand-600" />
+                <span><b>Manual</b> — chegam sem responsável; alguém da equipe assume ou um gestor transfere.</span>
+              </label>
+              <label className="flex items-start gap-2">
+                <input type="radio" name="mode" value="rodizio" defaultChecked={distribution === "rodizio"} className="mt-1 accent-brand-600" />
+                <span><b>Rodízio</b> — distribuídas automaticamente entre quem está “No rodízio”, alternando.</span>
+              </label>
+              <div className="flex justify-end"><Button size="sm">Salvar</Button></div>
+            </form>
+          </Card>
+        )}
+        <Card>
+          <CardHeader title="Adicionar pessoa" description={real ? "A pessoa recebe um convite por e-mail e define a própria senha." : undefined} />
           <div className="p-5">
-            <ActionForm action={createUserAction} submitLabel="Criar acesso" success="Usuário criado.">
+            <ActionForm action={createUserAction} submitLabel={real ? "Enviar convite" : "Criar acesso"} success="Usuário criado.">
               <Field label="Nome" htmlFor="name"><Input id="name" name="name" required /></Field>
               <Field label="E-mail" htmlFor="email"><Input id="email" name="email" type="email" required /></Field>
               <Field label="Perfil" htmlFor="role">
@@ -74,6 +106,7 @@ export default async function TeamPage() {
             </ActionForm>
           </div>
         </Card>
+        </div>
       </div>
 
       <Card className="mt-6">

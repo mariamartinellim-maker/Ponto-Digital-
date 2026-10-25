@@ -38,7 +38,7 @@ describe("parser de eventos (Cloud API + coexistência)", () => {
       { from: "5511911112222", id: "wamid.h1", timestamp: ts, type: "text", text: { body: "antiga do cliente" } },
       { from: "5511900009999", id: "wamid.h2", timestamp: ts, type: "text", text: { body: "antiga nossa" } },
     ] }] }] }));
-    expect(hist[0]!.events.map((e) => e.kind === "history" && e.direction)).toEqual(["in", "out"]);
+    expect(hist[0]!.events.filter((e) => e.kind === "history").map((e) => e.kind === "history" && e.direction)).toEqual(["in", "out"]);
   });
   it("ignora payloads de outros produtos ou malformados", () => {
     expect(parseWebhook({ object: "page" })).toEqual([]);

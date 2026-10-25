@@ -1,4 +1,3 @@
-import { ReadOnlyNotice } from "@/components/layout/demo-banner";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, FlaskConical, Play } from "lucide-react";
@@ -10,6 +9,8 @@ import { STAGES, type RecipientStatus } from "@/lib/data/types";
 import { formatDateTime } from "@/lib/format";
 import { can } from "@/lib/permissions";
 import { resolveAudience } from "@/lib/segmentation";
+import { env } from "@/lib/env";
+import { isSupabase } from "@/lib/supabase/server";
 import { cancelCampaignAction, runCampaignAction, simulateStatusesAction } from "../actions";
 
 export const metadata = { title: "Campanha" };
@@ -34,6 +35,9 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
   const tpl = d.templates.find((t) => t.id === camp.templateId);
   const clients = new Map(d.clients.map((c) => [c.id, c.name]));
   const manage = can(user.role, "campaigns:manage");
+  const live = isSupabase() && env().WHATSAPP_SEND_MODE === "live" && env().WHATSAPP_CAMPAIGNS_LIVE;
+  const testEnv = env().WHATSAPP_AMBIENTE === "teste";
+  const anyReal = camp.recipients.some((r) => r.status !== "simulada" && r.status !== "falhou");
   const s = campaignStats(camp);
   const audience = camp.status === "rascunho" ? resolveAudience(camp.segment, d.clients, d.deals) : null;
   const seg = camp.segment;
@@ -60,15 +64,14 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
       <PageHeader
         title={camp.name}
         description={`Modelo ${tpl?.name ?? "—"} · criada em ${formatDateTime(camp.createdAt)}${camp.executedAt ? ` · executada em ${formatDateTime(camp.executedAt)}` : ""}`}
-        actions={<Badge tone={camp.status === "concluida" ? "green" : camp.status === "cancelada" ? "red" : "slate"}>{camp.status === "concluida" ? "Executada (simulação)" : camp.status === "cancelada" ? "Cancelada" : "Rascunho"}</Badge>}
+        actions={<Badge tone={camp.status === "concluida" ? "green" : camp.status === "cancelada" ? "red" : "slate"}>{camp.status === "concluida" ? (anyReal ? "Executada" : "Executada (simulação)") : camp.status === "cancelada" ? "Cancelada" : "Rascunho"}</Badge>}
       />
-      <ReadOnlyNotice />
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_380px]">
         <div className="space-y-6">
           {camp.status === "concluida" && (
             <Card>
-              <CardHeader title="Resultados" description="Status atualizados pelos webhooks da Meta (simulados nesta versão)." />
+              <CardHeader title="Resultados" description={anyReal ? "Status atualizados automaticamente pelos webhooks da Meta." : "Execução simulada: nenhuma mensagem foi enviada."} />
               <div className="grid grid-cols-2 gap-4 p-5 lg:grid-cols-4">
                 {funnel.map((f) => (
                   <div key={f.label}>
@@ -87,7 +90,7 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
                 <span>Excluídos sem consentimento: <b>{camp.excludedNoConsent}</b></span>
                 <span>Excluídos descadastrados: <b>{camp.excludedOptOut}</b></span>
               </div>
-              {manage && s.pending > 0 && (
+              {manage && s.pending > 0 && !isSupabase() && (
                 <form action={simulateStatusesAction} className="flex flex-wrap items-center gap-3 border-t border-dashed border-amber-200 bg-amber-50/60 px-5 py-3 text-[13px] text-amber-900">
                   <input type="hidden" name="id" value={camp.id} />
                   <FlaskConical className="size-4" />
@@ -149,14 +152,20 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
             <Card className="p-5">
               <form action={runCampaignAction} className="space-y-4">
                 <input type="hidden" name="id" value={camp.id} />
-                <Notice tone="amber" title="Execução em modo simulação">
-                  Nenhuma mensagem será enviada ao WhatsApp. O sistema registra os envios e permite acompanhar o fluxo de resultados.
-                </Notice>
+                {live ? (
+                  <Notice tone="red" title="ENVIO REAL pelo WhatsApp">
+                    As mensagens serão enviadas de verdade{testEnv ? " — no ambiente de teste, somente para os números de teste da equipe (os demais são recusados)" : " aos clientes com consentimento"}. A Meta cobra por modelo de marketing entregue.
+                  </Notice>
+                ) : (
+                  <Notice tone="amber" title="Execução em modo simulação">
+                    Nenhuma mensagem será enviada ao WhatsApp. O sistema registra os envios e permite acompanhar o fluxo de resultados.
+                  </Notice>
+                )}
                 <label className="flex items-start gap-2 text-sm">
                   <input type="checkbox" name="confirm" required className="mt-0.5 accent-brand-600" />
                   Confirmo a execução para {audience?.eligible.length ?? 0} contato(s) com consentimento.
                 </label>
-                <Button className="w-full" disabled={!audience?.eligible.length}><Play className="size-4" /> Executar simulação</Button>
+                <Button className="w-full" disabled={!audience?.eligible.length}><Play className="size-4" /> {live ? "Enviar campanha" : "Executar simulação"}</Button>
               </form>
               <form action={cancelCampaignAction} className="mt-2">
                 <input type="hidden" name="id" value={camp.id} />

@@ -1,4 +1,3 @@
-import { ReadOnlyNotice } from "@/components/layout/demo-banner";
 import { Notice, PageHeader } from "@/components/ui";
 import { requireUser } from "@/lib/auth/session";
 import { scoped } from "@/lib/data/repo";
@@ -18,7 +17,6 @@ export default async function NewCampaignPage() {
   return (
     <>
       <PageHeader title="Nova campanha" description="Defina o modelo e o público. Contatos sem consentimento ou descadastrados são excluídos automaticamente." />
-      <ReadOnlyNotice />
       {templates.length === 0 ? (
         <Notice tone="amber">Nenhum modelo aprovado. Cadastre um modelo em “Modelos e respostas”.</Notice>
       ) : (

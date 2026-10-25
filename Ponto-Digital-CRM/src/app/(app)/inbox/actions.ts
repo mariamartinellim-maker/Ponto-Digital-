@@ -3,36 +3,18 @@
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { authorize, clientIp, type SessionUser } from "@/lib/auth/session";
-import { appendMessage, applyWhatsAppEvents, audit, now, scoped } from "@/lib/data/repo";
-import { getDb, mutate } from "@/lib/data/store";
-import type { Conversation, ConversationStatus, Database } from "@/lib/data/types";
-import { canSeeConversation, windowOpen } from "@/lib/inbox";
+import { authorize, clientIp } from "@/lib/auth/session";
+import { applyWhatsAppEvents, audit, now, scoped } from "@/lib/data/repo";
+import { mutate } from "@/lib/data/store";
+import type { Conversation, ConversationStatus } from "@/lib/data/types";
+import { windowOpen } from "@/lib/inbox";
+import { loadConv, loadTarget, recordOutgoing } from "@/lib/inbox-send";
 import { can } from "@/lib/permissions";
 import { renderTemplate } from "@/lib/segmentation";
 import * as sb from "@/lib/supabase/ops";
-import { isSupabase } from "@/lib/supabase/server";
+import { isSupabase, supabaseServer } from "@/lib/supabase/server";
 import { sendWhatsApp } from "@/lib/whatsapp/client";
 import { parseWebhook } from "@/lib/whatsapp/events";
-
-async function loadConv(user: SessionUser, id: string): Promise<{ db: Database; conv: Conversation }> {
-  const db = await getDb();
-  const conv = db.conversations.find((c) => c.id === id && c.orgId === user.orgId);
-  if (!conv || !canSeeConversation(user, conv)) throw new Error("Conversa não encontrada.");
-  return { db, conv };
-}
-
-/** Conversa + dados do cliente necessários para enviar, nos dois modos. */
-async function loadTarget(user: SessionUser, convId: string) {
-  if (isSupabase()) {
-    const r = await sb.loadConversation(convId);
-    if (!r || !canSeeConversation(user, r.conv)) throw new Error("Conversa não encontrada.");
-    return { conv: r.conv, phone: r.client.phone, consent: r.client.consent };
-  }
-  const { db, conv } = await loadConv(user, convId);
-  const client = db.clients.find((c) => c.id === conv.clientId)!;
-  return { conv, phone: client.phone, consent: client.consent.status as string };
-}
 
 export async function startConversationAction(formData: FormData) {
   const user = await authorize("inbox:reply");
@@ -58,26 +40,6 @@ export async function startConversationAction(formData: FormData) {
 
 export type SendState = { error?: string; ok?: number } | undefined;
 
-/** Grava a mensagem enviada e assume a conversa se ela não tiver responsável. */
-async function recordOutgoing(user: SessionUser, conv: Conversation, body: string, simulated: boolean, waMessageId: string) {
-  if (isSupabase()) {
-    const r = await sb.insertOutgoingMessage(user, conv.id, body, simulated ? "simulada" : "enviada", waMessageId);
-    if (!r.ok) return r.error;
-    if (!conv.assigneeId || conv.status === "pendente") {
-      await sb.updateConversation(conv.id, { assigneeId: conv.assigneeId ?? user.id, status: conv.status === "pendente" ? "aberta" : conv.status });
-    }
-    return null;
-  }
-  const db = await getDb();
-  const live = db.conversations.find((c) => c.id === conv.id)!;
-  await mutate((d) => {
-    appendMessage(d, live, { direction: "out", origin: "crm", body, status: simulated ? "simulada" : "enviada", waMessageId, authorId: user.id });
-    if (!live.assigneeId) live.assigneeId = user.id;
-    if (live.status === "pendente") live.status = "aberta";
-  });
-  return null;
-}
-
 export async function sendMessageAction(_: SendState, formData: FormData): Promise<SendState> {
   const user = await authorize("inbox:reply");
   const convId = String(formData.get("conversationId"));
@@ -90,10 +52,19 @@ export async function sendMessageAction(_: SendState, formData: FormData): Promi
   if (!windowOpen(conv)) {
     return { error: "Fora da janela de 24h. Use um modelo (template) aprovado para retomar a conversa." };
   }
-  const result = await sendWhatsApp({ type: "text", to: phone, body });
+  const suggestionId = String(formData.get("aiSuggestionId") ?? "");
+  const aiAssisted = /^[0-9a-f-]{36}$/.test(suggestionId);
+  const result = await sendWhatsApp({ type: "text", to: phone, body }, { orgId: user.orgId });
   if (!result.ok) return { error: `Falha no envio: ${result.error}` };
-  const err = await recordOutgoing(user, conv, body, result.simulated, result.waMessageId);
+  const err = await recordOutgoing(user, conv, body, result.simulated, result.waMessageId, { aiAssisted });
   if (err) return { error: err };
+  if (aiAssisted && isSupabase()) {
+    const client = await supabaseServer();
+    await client.from("ai_suggestions").update({ status: "usada" }).eq("id", suggestionId);
+  }
+  if (!result.simulated) {
+    await audit({ orgId: user.orgId, userId: user.id, action: "whatsapp.mensagem_enviada", entity: "conversa", entityId: convId, details: aiAssisted ? "texto revisado a partir de sugestão da IA" : "" });
+  }
   revalidatePath(`/inbox/${convId}`);
   return { ok: Date.now() };
 }
@@ -110,7 +81,7 @@ export async function sendTemplateAction(_: SendState, formData: FormData): Prom
     return { error: "Modelos de marketing exigem consentimento (opt-in) do cliente." };
   }
   if (vars.some((v) => !v)) return { error: "Preencha todas as variáveis do modelo." };
-  const result = await sendWhatsApp({ type: "template", to: phone, name: tpl.name, language: tpl.language, variables: vars });
+  const result = await sendWhatsApp({ type: "template", to: phone, name: tpl.name, language: tpl.language, variables: vars }, { orgId: user.orgId });
   if (!result.ok) return { error: `Falha no envio: ${result.error}` };
   const err = await recordOutgoing(user, conv, renderTemplate(tpl.body, vars), result.simulated, result.waMessageId);
   if (err) return { error: err };

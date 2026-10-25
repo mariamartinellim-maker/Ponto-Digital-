@@ -1,7 +1,7 @@
 import "server-only";
 import type { SessionUser } from "../auth/session";
 import type { ImportRow } from "../csv";
-import type { ConsentSource, ConversationStatus, MessageStatus, Stage } from "../data/types";
+import type { ConsentSource, ConversationStatus, MessageMedia, MessageStatus, Stage } from "../data/types";
 import { phoneDedupKey } from "../phone";
 import { toConversation } from "./data";
 import { dbError, supabaseServer } from "./server";
@@ -183,17 +183,20 @@ export async function insertOutgoingMessage(
   body: string,
   status: Extract<MessageStatus, "simulada" | "enviada">,
   waMessageId: string,
+  extra: { media?: MessageMedia | null; aiAssisted?: boolean; origin?: "crm" | "campanha" } = {},
 ): Promise<Result> {
   const sb = await supabaseServer();
   const { error } = await sb.from("messages").insert({
     org_id: user.orgId,
     conversation_id: convId,
     direction: "out",
-    origin: "crm",
+    origin: extra.origin ?? "crm",
     body,
     status,
     wa_message_id: waMessageId,
     author_id: user.id,
+    ...(extra.media ? { media: extra.media } : {}),
+    ...(extra.aiAssisted ? { ai_assisted: true } : {}),
   });
   return error ? fail(dbError(error)) : ok(undefined);
 }

@@ -20,13 +20,24 @@ const schema = z.object({
   DEMO_ADMIN_PASSWORD: z.string().min(10).optional(),
   DEMO_TEAM_PASSWORD: z.string().min(10).optional(),
 
-  // Supabase: só a URL e a chave PUBLICÁVEL (publishable/anon). Ficam apenas no servidor.
-  // A chave secreta (service_role) NÃO é usada nesta etapa.
+  // Supabase: URL e chave PUBLICÁVEL (publishable/anon) — usadas com a sessão de cada usuário (RLS).
   SUPABASE_URL: z.string().url("SUPABASE_URL inválida (ex.: https://abcd1234.supabase.co).").optional(),
   SUPABASE_PUBLISHABLE_KEY: z.string().min(20, "SUPABASE_PUBLISHABLE_KEY inválida.").optional(),
+  // Chave SECRETA: só no servidor (variável do Render), nunca no navegador nem no Git. Usada apenas para
+  // gravar eventos do WhatsApp recebidos pelo webhook e para convidar membros da equipe.
+  SUPABASE_SECRET_KEY: z.string().min(20, "SUPABASE_SECRET_KEY inválida.").optional(),
 
-  // WhatsApp Cloud API (oficial da Meta). Todos opcionais até a etapa de integração.
+  // WhatsApp Cloud API (oficial da Meta). Todos opcionais até a conexão do número.
   WHATSAPP_SEND_MODE: z.enum(["simulacao", "live"]).default("simulacao"),
+  // "teste": envio real SOMENTE para os números de WHATSAPP_NUMEROS_TESTE. "producao": clientes reais.
+  WHATSAPP_AMBIENTE: z.enum(["teste", "producao"]).default("teste"),
+  WHATSAPP_NUMEROS_TESTE: z.string().default(""),
+  WHATSAPP_GRAPH_BASE: z.string().url().default("https://graph.facebook.com"),
+  // Chave (32 bytes em base64) que criptografa o token obtido na conexão por coexistência.
+  WHATSAPP_TOKEN_KEY: z.string().optional(),
+  // App da Meta usado na conexão por coexistência (Embedded Signup). Não são segredos.
+  META_APP_ID: z.string().regex(/^\d{5,20}$/, "META_APP_ID inválido.").optional(),
+  META_ES_CONFIG_ID: z.string().regex(/^\d{5,20}$/, "META_ES_CONFIG_ID inválido.").optional(),
   WHATSAPP_CAMPAIGNS_LIVE: z
     .enum(["true", "false"])
     .default("false")
@@ -37,6 +48,12 @@ const schema = z.object({
   WHATSAPP_WABA_ID: z.string().optional(),
   WHATSAPP_APP_SECRET: z.string().optional(),
   WHATSAPP_VERIFY_TOKEN: z.string().optional(),
+
+  // Inteligência artificial (Claude, da Anthropic). Sem a chave, a IA fica desligada.
+  ANTHROPIC_API_KEY: z.string().optional(),
+  AI_MODEL: z.string().regex(/^claude-[a-z0-9-]+$/, "AI_MODEL inválido.").default("claude-opus-5-5"),
+  AI_ESFORCO: z.enum(["low", "medium", "high"]).default("low"),
+  AI_LIMITE_MENSAL: z.coerce.number().int().min(0).max(100000).default(1000),
 });
 
 export type Env = z.infer<typeof schema>;
@@ -63,6 +80,15 @@ export function env(): Env {
     if (!parsed.data.APP_URL.startsWith("https://")) {
       throw new Error("Publicação bloqueada: APP_URL precisa ser o endereço HTTPS do CRM (ex.: https://ponto-digital-crm.onrender.com).");
     }
+    if (new URL(parsed.data.WHATSAPP_GRAPH_BASE).origin !== "https://graph.facebook.com") {
+      throw new Error("Publicação bloqueada: WHATSAPP_GRAPH_BASE só pode ser a API oficial (https://graph.facebook.com).");
+    }
+    if (parsed.data.WHATSAPP_SEND_MODE === "live" && !parsed.data.WHATSAPP_APP_SECRET) {
+      throw new Error("Envio real exige WHATSAPP_APP_SECRET (validação da assinatura dos webhooks da Meta).");
+    }
+  }
+  if (parsed.data.WHATSAPP_TOKEN_KEY && Buffer.from(parsed.data.WHATSAPP_TOKEN_KEY, "base64").length !== 32) {
+    throw new Error("WHATSAPP_TOKEN_KEY precisa ter 32 bytes em base64 (gere com: npm run whatsapp:chave).");
   }
   if (parsed.data.DATA_BACKEND === "supabase") {
     if (!parsed.data.SUPABASE_URL || !parsed.data.SUPABASE_PUBLISHABLE_KEY) {
@@ -72,6 +98,9 @@ export function env(): Env {
       throw new Error(
         "SUPABASE_PUBLISHABLE_KEY contém a chave SECRETA (service_role), que ignora a segurança do banco. Use a chave publishable/anon.",
       );
+    }
+    if (parsed.data.SUPABASE_SECRET_KEY && !isSecretKey(parsed.data.SUPABASE_SECRET_KEY)) {
+      throw new Error("SUPABASE_SECRET_KEY não é a chave secreta do Supabase (sb_secret_… ou service_role).");
     }
   }
   cached = parsed.data;
@@ -94,15 +123,29 @@ export function isSecretKey(key: string) {
   }
 }
 
+/** Números autorizados a receber envios reais no ambiente de teste (só dígitos). */
+export function testNumbers() {
+  return env()
+    .WHATSAPP_NUMEROS_TESTE.split(/[,;\s]+/)
+    .map((n) => n.replace(/\D/g, ""))
+    .filter((n) => n.length >= 10);
+}
+
 /** Status das integrações, sem expor valores secretos. */
 export function integrationStatus() {
   const e = env();
   return {
     backend: e.DATA_BACKEND,
     supabaseConfigured: Boolean(e.SUPABASE_URL && e.SUPABASE_PUBLISHABLE_KEY),
+    hasSupabaseSecret: Boolean(e.SUPABASE_SECRET_KEY),
+    ai: { configured: Boolean(e.ANTHROPIC_API_KEY), model: e.AI_MODEL, monthlyLimit: e.AI_LIMITE_MENSAL },
     whatsapp: {
       sendMode: e.WHATSAPP_SEND_MODE,
+      environment: e.WHATSAPP_AMBIENTE,
+      testNumbers: testNumbers().length,
       campaignsLive: e.WHATSAPP_CAMPAIGNS_LIVE,
+      hasTokenKey: Boolean(e.WHATSAPP_TOKEN_KEY),
+      embeddedSignup: Boolean(e.META_APP_ID && e.META_ES_CONFIG_ID),
       hasAccessToken: Boolean(e.WHATSAPP_ACCESS_TOKEN),
       hasPhoneNumberId: Boolean(e.WHATSAPP_PHONE_NUMBER_ID),
       hasWabaId: Boolean(e.WHATSAPP_WABA_ID),

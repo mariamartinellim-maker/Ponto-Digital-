@@ -39,6 +39,8 @@ export interface User {
   active: boolean;
   /** Incrementado ao trocar senha/desativar: invalida sessões antigas. */
   sessionVersion: number;
+  /** Participa do rodízio de novos atendimentos do WhatsApp. */
+  inRotation?: boolean;
   createdAt: string;
   lastLoginAt: string | null;
 }
@@ -108,6 +110,17 @@ export interface Conversation {
 /** De onde veio a mensagem: importante na coexistência App Business + Cloud API. */
 export type MessageOrigin = "cliente" | "crm" | "app_business" | "campanha" | "historico" | "sistema";
 export type MessageStatus = "recebida" | "simulada" | "enviada" | "entregue" | "lida" | "falhou";
+/** Mídia de uma mensagem: o arquivo fica na Meta e é baixado sob demanda pelo CRM. */
+export interface MessageMedia {
+  type: "image" | "audio" | "video" | "document" | "sticker";
+  id?: string;
+  mime?: string;
+  filename?: string;
+  caption?: string;
+  voice?: boolean;
+  /** Envio simulado: o arquivo não foi enviado à Meta. */
+  simulated?: boolean;
+}
 export interface Message {
   id: string;
   orgId: string;
@@ -119,6 +132,11 @@ export interface Message {
   waMessageId: string | null;
   authorId: string | null;
   createdAt: string;
+  media?: MessageMedia | null;
+  /** Texto escrito a partir de uma sugestão da IA (revisada e enviada por um humano). */
+  aiAssisted?: boolean;
+  /** Motivo da falha de entrega informado pela Meta. */
+  error?: string | null;
 }
 
 export interface QuickReply {

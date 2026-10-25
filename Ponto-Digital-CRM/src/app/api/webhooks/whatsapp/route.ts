@@ -3,9 +3,11 @@ import { connection, NextResponse, type NextRequest } from "next/server";
 import { applyWhatsAppEvents } from "@/lib/data/repo";
 import { getDb } from "@/lib/data/store";
 import { env } from "@/lib/env";
+import { hasSupabaseAdmin } from "@/lib/supabase/admin";
 import { isSupabase } from "@/lib/supabase/server";
 import { rateLimit } from "@/lib/rate-limit";
 import { parseWebhook } from "@/lib/whatsapp/events";
+import { ingestSupabase } from "@/lib/whatsapp/ingest";
 import { verifyMetaSignature } from "@/lib/whatsapp/signature";
 
 const MAX_BODY = 1024 * 1024; // 1 MB
@@ -39,8 +41,8 @@ export async function POST(req: NextRequest) {
 
   const secret = env().WHATSAPP_APP_SECRET;
   if (!secret) return new NextResponse("Webhook não configurado", { status: 503 });
-  // No Supabase, o processamento de webhooks será ligado na etapa de integração do WhatsApp.
-  if (isSupabase()) return new NextResponse("Webhook ainda não disponível no modo Supabase", { status: 503 });
+  // No Supabase, os eventos são gravados pelo servidor com a chave secreta (não há usuário logado).
+  if (isSupabase() && !hasSupabaseAdmin()) return new NextResponse("Webhook não configurado (SUPABASE_SECRET_KEY)", { status: 503 });
 
   const length = Number(req.headers.get("content-length") ?? 0);
   if (length > MAX_BODY) return new NextResponse("Payload Too Large", { status: 413 });
@@ -60,7 +62,15 @@ export async function POST(req: NextRequest) {
   }
 
   const envelopes = parseWebhook(payload);
-  // Uma organização por número. Com Supabase, mapear phone_number_id → organização em tabela própria.
+  if (isSupabase()) {
+    try {
+      const stats = await ingestSupabase(envelopes);
+      return NextResponse.json({ received: true, ...stats });
+    } catch {
+      return new NextResponse("Erro ao processar", { status: 500 });
+    }
+  }
+  // Modo demonstração: uma única organização.
   const expectedPhone = env().WHATSAPP_PHONE_NUMBER_ID;
   const accepted = envelopes.filter((e) => !expectedPhone || !e.phoneNumberId || e.phoneNumberId === expectedPhone);
   const db = await getDb();

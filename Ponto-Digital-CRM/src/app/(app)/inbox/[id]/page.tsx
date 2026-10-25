@@ -1,7 +1,8 @@
-import { isSupabase } from "@/lib/supabase/server";
+import { isSupabase, supabaseServer } from "@/lib/supabase/server";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Check, CheckCheck, Clock, History, Smartphone, TriangleAlert } from "lucide-react";
+import { ArrowLeft, Check, CheckCheck, Clock, FileText, History, Paperclip, Smartphone, Sparkles, TriangleAlert } from "lucide-react";
+import { env } from "@/lib/env";
 import { Avatar, Badge, Button, cn, Select } from "@/components/ui";
 import { ConsentBadge } from "@/components/ui/labels";
 import { requireUser } from "@/lib/auth/session";
@@ -23,6 +24,30 @@ const ORIGIN: Partial<Record<Message["origin"], { label: string; icon: typeof Sm
   historico: { label: "Histórico sincronizado", icon: History },
   campanha: { label: "Campanha", icon: CheckCheck },
 };
+
+/** Mídia da mensagem: exibida pelo CRM (download sob demanda da Meta, só para quem vê a conversa). */
+function MediaView({ m, out }: { m: Message; out: boolean }) {
+  const media = m.media;
+  if (!media) return null;
+  const src = `/api/whatsapp/midia/${m.id}`;
+  const chip = (label: string) => (
+    <span className={cn("mb-1 flex items-center gap-1.5 rounded-lg px-2 py-1 text-[12.5px]", out ? "bg-white/15" : "bg-slate-100 text-slate-600")}>
+      <Paperclip className="size-3.5 shrink-0" /> {label}
+    </span>
+  );
+  if (!media.id) return chip(media.simulated ? `${media.filename ?? "arquivo"} (envio simulado)` : "Mídia não disponível (histórico antigo)");
+  if (media.type === "image" || media.type === "sticker") {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={src} alt={media.caption || "Imagem recebida"} loading="lazy" className="mb-1 max-h-72 rounded-xl object-contain" />;
+  }
+  if (media.type === "audio") return <audio controls preload="none" src={src} className="mb-1 h-10 max-w-full" aria-label={media.voice ? "Mensagem de voz" : "Áudio"} />;
+  if (media.type === "video") return <video controls preload="none" src={src} className="mb-1 max-h-72 rounded-xl" aria-label="Vídeo" />;
+  return (
+    <a href={`${src}?baixar=1`} className={cn("mb-1 flex items-center gap-2 rounded-lg px-2.5 py-2 text-[13px] font-medium underline-offset-2 hover:underline", out ? "bg-white/15" : "bg-slate-100 text-slate-700")}>
+      <FileText className="size-4 shrink-0" /> {media.filename ?? "Documento"}
+    </a>
+  );
+}
 
 function StatusIcon({ status }: { status: Message["status"] }) {
   if (status === "lida") return <CheckCheck className="size-3.5 text-sky-300" aria-label="Lida" />;
@@ -54,6 +79,11 @@ export default async function ConversationPage({
   const remainingH = conv.lastInboundAt ? Math.max(0, Math.ceil((WINDOW_MS - (requestTime() - new Date(conv.lastInboundAt).getTime())) / 3600_000)) : 0;
   const canReply = can(user.role, "inbox:reply");
   const canAssign = can(user.role, "inbox:assign");
+  let aiEnabled = false;
+  if (isSupabase() && env().ANTHROPIC_API_KEY && can(user.role, "ai:use")) {
+    const { data: kb } = await (await supabaseServer()).from("ai_knowledge").select("enabled").maybeSingle();
+    aiEnabled = kb?.enabled === true;
+  }
 
   return (
     <InboxShell user={user} activeId={id} filter={f} q={q}>
@@ -126,6 +156,11 @@ export default async function ConversationPage({
                     <p className={cn("mb-0.5 flex items-center gap-1 text-[11px] text-slate-400", out && "justify-end")}>
                       {origin && <origin.icon className="size-3" />}
                       {origin?.label ?? users.get(m.authorId!)}
+                      {m.aiAssisted && (
+                        <span className="ml-1 inline-flex items-center gap-0.5 text-violet-500" title="Texto sugerido pela IA e revisado por uma pessoa antes do envio">
+                          <Sparkles className="size-3" /> sugerida pela IA
+                        </span>
+                      )}
                     </p>
                   )}
                   <div
@@ -139,12 +174,14 @@ export default async function ConversationPage({
                       m.origin === "historico" && "opacity-80",
                     )}
                   >
-                    {m.body}
+                    <MediaView m={m} out={out} />
+                    {m.media?.id && /^\[(imagem|áudio|vídeo|documento|figurinha)\]/.test(m.body) ? m.body.replace(/^\[[^\]]+\]\s?/, "") : m.body}
                     <span className={cn("ml-2 inline-flex translate-y-0.5 items-center gap-1 text-[10.5px]", out ? "text-white/70" : "text-slate-400")}>
                       {formatTime(m.createdAt)}
                       {out && <StatusIcon status={m.status} />}
                     </span>
                   </div>
+                  {m.status === "falhou" && m.error && <p className="mt-0.5 text-right text-[11px] text-red-600">Não entregue: {m.error}</p>}
                 </div>
               </li>
             );
@@ -163,6 +200,7 @@ export default async function ConversationPage({
           hasConsent={client.consent.status === "opt_in"}
           quickReplies={d.quickReplies.map((r) => ({ shortcut: r.shortcut, title: r.title, body: r.body }))}
           templates={d.templates.filter((t) => t.status === "APPROVED").map((t) => ({ id: t.id, name: t.name, body: t.body, category: t.category }))}
+          aiEnabled={aiEnabled}
         />
       )}
       {!isSupabase() && <SimulateInbound conversationId={id} />}

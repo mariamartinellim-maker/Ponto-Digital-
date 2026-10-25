@@ -8,7 +8,7 @@ import { authorize, clientIp } from "@/lib/auth/session";
 import { analyzeCsv, type ImportAnalysis } from "@/lib/csv";
 import { audit, findClientByPhone, now, scoped, setConsent } from "@/lib/data/repo";
 import * as sb from "@/lib/supabase/ops";
-import { isSupabase } from "@/lib/supabase/server";
+import { isSupabase, supabaseServer } from "@/lib/supabase/server";
 import { getDb, mutate } from "@/lib/data/store";
 import { normalizePhone } from "@/lib/phone";
 
@@ -142,8 +142,13 @@ export async function anonymizeClientAction(formData: FormData) {
   const id = String(formData.get("id"));
   if (formData.get("confirm") !== "ANONIMIZAR") throw new Error("Digite ANONIMIZAR para confirmar.");
   if (isSupabase()) {
-    // Exige apagar conversas, o que no banco só o servidor pode fazer: será uma função segura na próxima etapa.
-    throw new Error("A anonimização no Supabase será liberada na próxima etapa.");
+    // Função segura do banco: só administradores; apaga conversas, mantém o histórico de consentimento
+    // e registra a auditoria na mesma transação.
+    const client = await supabaseServer();
+    const { error } = await client.rpc("anonymize_client", { p_client: id });
+    if (error) throw new Error(error.code === "42501" ? "Somente administradores podem anonimizar clientes." : "Não foi possível anonimizar.");
+    revalidatePath("/clientes");
+    redirect("/clientes");
   }
   await mutate((db) => {
     const client = db.clients.find((c) => c.id === id && c.orgId === user.orgId);

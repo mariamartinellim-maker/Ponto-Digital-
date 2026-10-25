@@ -62,12 +62,19 @@ Para voltar aos dados demonstrativos locais (nada é apagado): `npm run modo:dem
 | Dashboard | ✅ leitura |
 | Clientes: cadastro, edição, consentimento, importação CSV, exportação LGPD | ✅ |
 | Funil comercial: mover etapas, nova oportunidade | ✅ |
-| Atendimento: conversas, envio (simulado), respostas rápidas, responsável, resolver | ✅ |
-| Agenda, Campanhas, Modelos, Equipe | 👁️ somente leitura (gravação na próxima etapa) |
-| Anonimização LGPD e mensagens recebidas do WhatsApp | próxima etapa (exigem função segura no servidor) |
+| Atendimento: conversas, envio, mídias, respostas rápidas, responsável, rodízio, sugestões da IA | ✅ (Fase 2) |
+| Agenda, Modelos (com envio à Meta), Campanhas, Equipe (convite por e-mail) | ✅ (Fase 2) |
+| Anonimização LGPD e mensagens recebidas do WhatsApp (webhook) | ✅ (Fase 2) |
 
-Novos usuários da equipe, por enquanto: *Authentication → Users → Add user* e, no SQL Editor,
-`insert into public.profiles (id, org_id, name, email, role) select u.id, p.org_id, 'Nome', u.email, 'atendente' from auth.users u, public.profiles p where u.email = 'pessoa@dominio.com' and p.email = 'seu-email@dominio.com';`
+## 6. Atualizar o banco para a Fase 2 (WhatsApp, equipe e IA)
+
+A migração `supabase/migrations/20261025000000_fase2_whatsapp_ia.sql` **só acrescenta** colunas, tabelas e funções: os dados existentes não são alterados e o CRM publicado continua funcionando. Aplique **antes** de aprovar o Pull Request da Fase 2.
+
+1. No Supabase: **SQL Editor → New query**.
+2. Cole todo o conteúdo do arquivo e clique em **Run**. Deve aparecer *Success. No rows returned*.
+3. Confira em **Table Editor** as novas tabelas: `whatsapp_accounts`, `wa_contacts`, `ai_knowledge`, `ai_suggestions`.
+
+Execute uma única vez (rodar de novo dá erro de "já existe", sem estragar nada). Testada em `supabase/tests/fase2-test.sql` (41 verificações) e aplicada sobre um banco com dados da Fase 1 sem perdas.
 
 ## O que o esquema garante (testado em `supabase/tests/rls-test.sql` — 58 verificações)
 
@@ -85,10 +92,11 @@ Novos usuários da equipe, por enquanto: *Authentication → Users → Add user*
 
 ## Futuras alterações no banco
 
-Toda tabela nova criada em `public` recebe do Supabase acesso total para `anon` e `authenticated`. Cada nova migração deve **revogar** esse acesso, conceder só o necessário, ativar RLS e ser incluída no teste `supabase/tests/rls-test.sql`.
+Toda tabela nova criada em `public` recebe do Supabase acesso total para `anon` e `authenticated`. Cada nova migração deve **revogar** esse acesso, conceder só o necessário, ativar RLS e ser incluída num teste em `supabase/tests/` (ex.: `fase2-test.sql`).
 
 Para rodar o teste num PostgreSQL local (nunca no Supabase):
 
 ```bash
 createdb pdcrm_test && psql -d pdcrm_test -f supabase/tests/rls-test.sql
+createdb pdcrm_f2 && psql -d pdcrm_f2 -f supabase/tests/fase2-test.sql
 ```

@@ -2,7 +2,7 @@
 
 CRM da agência **Ponto Digital**: clientes, funil comercial, atendimento pelo WhatsApp (API oficial da Meta), campanhas com consentimento, agenda, equipe com permissões e auditoria. Funciona no computador e no celular e pode ser instalado como aplicativo (PWA).
 
-> **Versão atual: 1ª versão funcional em modo demonstração.** Os dados são fictícios e ficam em `.data/demo-db.json` no seu computador. **Nenhuma mensagem de WhatsApp é enviada** — envios e campanhas são simulados. Já pode ser conectado ao **Supabase** (`npm run supabase:config`); a integração oficial do WhatsApp entra numa próxima etapa, somente com a sua autorização.
+> **Publicado** em https://ponto-digital-crm.onrender.com com o **Supabase**. **Fase 2:** WhatsApp oficial em **coexistência** com o app WhatsApp Business (mesmo número no celular e no CRM), mídias, rodízio da equipe e **assistente de IA** que sugere respostas. Por padrão nada é enviado ao WhatsApp (simulação) até a conexão do número e a liberação das travas — ver [docs/WHATSAPP_COEXISTENCIA.md](docs/WHATSAPP_COEXISTENCIA.md) e [docs/IA.md](docs/IA.md). No computador, o modo demonstração continua disponível.
 
 ![Dashboard](docs/screenshots/02-dashboard.png)
 
@@ -14,7 +14,8 @@ CRM da agência **Ponto Digital**: clientes, funil comercial, atendimento pelo W
 | **Clientes** | Cadastro com nome, telefone (padronizado no formato do WhatsApp), cidade, serviços contratados, etiquetas, responsável e observações. Busca e filtros. |
 | **Importação CSV** | Aceita `,` ou `;`, reconhece colunas em português, padroniza telefones e **elimina duplicidades** (no arquivo e na base, inclusive números com/sem o nono dígito). Prévia antes de importar. |
 | **Funil comercial** | Novo Lead → Em Atendimento → Proposta Enviada → Fechado / Perdido. Arrastar e soltar no computador; seletor de etapa no celular. |
-| **Atendimento** | Caixa de entrada por cliente, histórico completo, responsável, transferência, status (aberta/pendente/resolvida), indicação da origem (CRM, **app WhatsApp Business**, histórico sincronizado, campanha) e da **janela de 24h** da Meta. |
+| **Atendimento** | Caixa de entrada por cliente, histórico completo, responsável, transferência, **rodízio automático**, status (aberta/pendente/resolvida), origem (CRM, **app WhatsApp Business**, histórico sincronizado, campanha), **janela de 24h** da Meta, imagens, áudios, vídeos e documentos. |
+| **Assistente de IA** | Base de conhecimento da agência (serviços, preços, portfólio, tom) e sugestões de resposta que a equipe revisa antes de enviar. |
 | **Respostas rápidas e modelos** | Atalhos com `/` na conversa. Modelos (templates) com categoria, variáveis `{{1}}` e status de aprovação. |
 | **Campanhas** | Segmentação por cidade, serviço, etapa e etiqueta; **apenas contatos com consentimento**; descadastrados sempre excluídos; somente modelos aprovados; acompanhamento de entregas, leituras, respostas e descadastros. |
 | **Descadastro** | Mensagens "SAIR", "PARAR", "STOP" descadastram automaticamente e ficam registradas. |
@@ -102,11 +103,14 @@ npm run demo:reset && npm run dev   # em um terminal
 node scripts/e2e.cjs "<senha admin>" "<senha equipe>" "$PWD"   # em outro
 ```
 
-Teste do banco (isolamento por organização / RLS — 58 verificações), num PostgreSQL 15+ local:
+Teste do banco (isolamento por organização / RLS — 58 verificações; Fase 2 — 41 verificações), num PostgreSQL 15+ local:
 
 ```bash
 createdb pdcrm_test && psql -d pdcrm_test -f supabase/tests/rls-test.sql
+createdb pdcrm_f2 && psql -d pdcrm_f2 -f supabase/tests/fase2-test.sql
 ```
+
+Teste ponta a ponta da Fase 2 (54 cenários) com simuladores locais da Meta e da Anthropic — nunca aponta para o WhatsApp ou a IA reais: `scripts/testes/e2e-fase2.cjs` (instruções no cabeçalho do arquivo).
 
 ## Estrutura
 
@@ -150,5 +154,5 @@ Detalhes em [docs/SEGURANCA_LGPD.md](docs/SEGURANCA_LGPD.md) e [docs/WHATSAPP_CO
 
 1. **Sua aprovação desta primeira versão.**
 2. **Supabase** ✅ esquema aplicado e CRM integrado (login, clientes, funil e atendimento). Para conectar: `npm run supabase:config` — passo a passo em [docs/SUPABASE.md](docs/SUPABASE.md). As chaves ficam só no `.env.local`, nunca em mensagens.
-3. **Publicação no Render Starter (US$ 7/mês)** — código pronto e testado (`render.yaml` na raiz); comparação de custos e passo a passo em [docs/PUBLICACAO.md](docs/PUBLICACAO.md). Próximas etapas (WhatsApp, equipe, IA, módulos pendentes) em [docs/ROTEIRO.md](docs/ROTEIRO.md).
-4. **WhatsApp oficial com coexistência** — ver o plano em `docs/WHATSAPP_COEXISTENCIA.md`. Nenhuma alteração no seu número sem a sua aprovação.
+3. **Publicação no Render Starter** ✅ — [docs/PUBLICACAO.md](docs/PUBLICACAO.md).
+4. **Fase 2: WhatsApp oficial com coexistência + IA** — código pronto e testado; ações que dependem de você em [docs/WHATSAPP_COEXISTENCIA.md](docs/WHATSAPP_COEXISTENCIA.md). Roteiro em [docs/ROTEIRO.md](docs/ROTEIRO.md).

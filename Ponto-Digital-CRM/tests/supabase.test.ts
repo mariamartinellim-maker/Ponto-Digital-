@@ -19,7 +19,7 @@ describe("travas de publicação (Vercel, Render ou CRM_PUBLICADO)", () => {
   const original = { ...process.env };
   const loadEnv = async (vars: Record<string, string>) => {
     vi.resetModules();
-    process.env = { ...original, ...vars };
+    process.env = { ...original, WHATSAPP_SEND_MODE: "simulacao", ...vars };
     return (await import("@/lib/env")).env;
   };
   afterEach(() => {
