@@ -21,7 +21,7 @@ function toPublic(u: User, orgName: string): SessionUser {
 export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
   if (isSupabase()) return getSupabaseSessionUser();
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
-  const payload = await verifySession(token, env().SESSION_SECRET);
+  const payload = await verifySession(token, env().SESSION_SECRET!);
   if (!payload) return null;
   const db = await getDb();
   const user = db.users.find((u) => u.id === payload.uid && u.orgId === payload.org);
@@ -79,7 +79,7 @@ export async function authorize(permission?: Permission): Promise<SessionUser> {
 export async function createSession(user: User) {
   const token = await signSession(
     { uid: user.id, org: user.orgId, sv: user.sessionVersion, exp: Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS },
-    env().SESSION_SECRET,
+    env().SESSION_SECRET!,
   );
   (await cookies()).set(SESSION_COOKIE, token, {
     httpOnly: true,

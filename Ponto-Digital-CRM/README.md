@@ -150,5 +150,5 @@ Detalhes em [docs/SEGURANCA_LGPD.md](docs/SEGURANCA_LGPD.md) e [docs/WHATSAPP_CO
 
 1. **Sua aprovação desta primeira versão.**
 2. **Supabase** ✅ esquema aplicado e CRM integrado (login, clientes, funil e atendimento). Para conectar: `npm run supabase:config` — passo a passo em [docs/SUPABASE.md](docs/SUPABASE.md). As chaves ficam só no `.env.local`, nunca em mensagens.
-3. **Hospedagem** (ex.: Vercel) com domínio HTTPS — só com sua autorização, pois publica o sistema.
+3. **Publicação na Vercel** — código pronto e testado; passo a passo em [docs/PUBLICACAO.md](docs/PUBLICACAO.md). Próximas etapas (WhatsApp, equipe, IA, módulos pendentes) em [docs/ROTEIRO.md](docs/ROTEIRO.md).
 4. **WhatsApp oficial com coexistência** — ver o plano em `docs/WHATSAPP_COEXISTENCIA.md`. Nenhuma alteração no seu número sem a sua aprovação.
