@@ -1,4 +1,3 @@
-import { ReadOnlyNotice } from "@/components/layout/demo-banner";
 import Link from "next/link";
 import { CalendarCheck, Check, Handshake, Phone, Send, Trash2, Undo2, Users } from "lucide-react";
 import { Badge, buttonClass, Card, CardHeader, cn, EmptyState, Field, Input, PageHeader, Select, Textarea } from "@/components/ui";
@@ -105,7 +104,6 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
           )
         }
       />
-      <ReadOnlyNotice />
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_360px]">
         <div className="space-y-6">
           {overdue.length > 0 && (

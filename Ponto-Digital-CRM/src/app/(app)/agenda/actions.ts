@@ -3,7 +3,7 @@
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { isSupabase, SUPABASE_PROXIMA_ETAPA } from "@/lib/supabase/server";
+import { dbError, isSupabase, supabaseServer } from "@/lib/supabase/server";
 import { authorize, clientIp } from "@/lib/auth/session";
 import { audit, now } from "@/lib/data/repo";
 import { mutate } from "@/lib/data/store";
@@ -23,7 +23,6 @@ const schema = z.object({
 
 export async function createTaskAction(_: TaskState, formData: FormData): Promise<TaskState> {
   const user = await authorize();
-  if (isSupabase()) return { error: SUPABASE_PROXIMA_ETAPA };
   const parsed = schema.safeParse({
     title: formData.get("title") ?? "",
     type: formData.get("type") ?? "outro",
@@ -37,6 +36,23 @@ export async function createTaskAction(_: TaskState, formData: FormData): Promis
   const assigneeId = can(user.role, "tasks:manage_all") && v.assigneeId ? v.assigneeId : user.id;
   const due = new Date(`${v.dueAt}:00-03:00`);
   if (Number.isNaN(due.getTime())) return { error: "Data inválida." };
+  if (isSupabase()) {
+    // O banco garante: cliente e responsável da mesma organização; atendente só cria tarefas próprias.
+    const sb = await supabaseServer();
+    const { error } = await sb.from("tasks").insert({
+      org_id: user.orgId,
+      title: v.title,
+      type: v.type,
+      client_id: v.clientId || null,
+      assignee_id: assigneeId,
+      due_at: due.toISOString(),
+      notes: v.notes,
+    });
+    if (error) return { error: error.code === "23503" ? "Cliente ou responsável inválido." : dbError(error) };
+    await audit({ orgId: user.orgId, userId: user.id, action: "tarefa.criada", entity: "tarefa", entityId: null, details: v.title });
+    revalidatePath("/agenda");
+    return { ok: Date.now() };
+  }
   const err = await mutate((db) => {
     if (v.clientId && !db.clients.some((c) => c.id === v.clientId && c.orgId === user.orgId)) return "Cliente inválido.";
     if (!db.users.some((u) => u.id === assigneeId && u.orgId === user.orgId)) return "Responsável inválido.";
@@ -51,8 +67,17 @@ export async function createTaskAction(_: TaskState, formData: FormData): Promis
 
 export async function toggleTaskAction(formData: FormData) {
   const user = await authorize();
-  if (isSupabase()) throw new Error(SUPABASE_PROXIMA_ETAPA);
   const id = String(formData.get("id"));
+  if (isSupabase()) {
+    const sb = await supabaseServer();
+    const { data: t } = await sb.from("tasks").select("done,assignee_id").eq("id", id).maybeSingle();
+    if (!t) return;
+    if (t.assignee_id !== user.id && !can(user.role, "tasks:manage_all")) throw new Error("Sem permissão.");
+    const { error } = await sb.from("tasks").update({ done: !t.done }).eq("id", id);
+    if (error) throw new Error(dbError(error));
+    revalidatePath("/agenda");
+    return;
+  }
   await mutate((db) => {
     const t = db.tasks.find((x) => x.id === id && x.orgId === user.orgId);
     if (!t) return;
@@ -64,8 +89,16 @@ export async function toggleTaskAction(formData: FormData) {
 
 export async function deleteTaskAction(formData: FormData) {
   const user = await authorize();
-  if (isSupabase()) throw new Error(SUPABASE_PROXIMA_ETAPA);
   const id = String(formData.get("id"));
+  if (isSupabase()) {
+    const sb = await supabaseServer();
+    const { data, error } = await sb.from("tasks").delete().eq("id", id).select("id");
+    if (error) throw new Error(dbError(error));
+    if (!data?.length) throw new Error("Sem permissão.");
+    await audit({ orgId: user.orgId, userId: user.id, action: "tarefa.excluida", entity: "tarefa", entityId: id, ip: await clientIp() });
+    revalidatePath("/agenda");
+    return;
+  }
   await mutate((db) => {
     const t = db.tasks.find((x) => x.id === id && x.orgId === user.orgId);
     if (!t) return;

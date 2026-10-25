@@ -73,3 +73,23 @@ Tudo deve aparecer com ✔. Depois, entre com seu e-mail e senha pelo navegador 
 - No Supabase, mantenha o **cadastro público desativado** (o verificador confere).
 - Use senhas longas e únicas para cada pessoa da equipe; nunca compartilhe logins.
 - Domínio próprio (ex.: `crm.pontodigital.com.br`) pode ser ligado depois em *Render → Settings → Custom Domains* (sem custo extra; atualize `APP_URL` e as URLs do Supabase).
+
+## Fase 2: atualização sem interromper o CRM
+
+Ordem segura (o CRM publicado continua funcionando em todas as etapas):
+1. **Banco:** aplique a migração da Fase 2 no Supabase ([SUPABASE.md, item 6](SUPABASE.md#6-atualizar-o-banco-para-a-fase-2-whatsapp-equipe-e-ia)). Ela só acrescenta estruturas.
+2. **Código:** aprove o Pull Request da Fase 2. O Render publica sozinho a nova versão; sem as variáveis novas, tudo continua em simulação e a IA fica desligada.
+3. **Variáveis novas** (Render → serviço → **Environment**), cadastradas por você, sem passar por mensagens:
+
+| Variável | Para quê | Onde obter |
+| --- | --- | --- |
+| `SUPABASE_SECRET_KEY` | gravar mensagens recebidas e convidar a equipe | Supabase → Project Settings → API Keys → *secret* |
+| `WHATSAPP_APP_SECRET`, `META_APP_ID` | validar webhooks e conectar o número | Meta for Developers → app → Configurações → Básico |
+| `META_ES_CONFIG_ID` | botão de conexão (coexistência) | Login do Facebook para Empresas → Configurações |
+| `WHATSAPP_TOKEN_KEY`, `WHATSAPP_VERIFY_TOKEN` | criptografar o token; cadastrar o webhook | `npm run whatsapp:chave` no seu computador |
+| `WHATSAPP_NUMEROS_TESTE` | celulares da equipe para os testes | — |
+| `ANTHROPIC_API_KEY` | assistente de IA | console.anthropic.com → API Keys |
+
+`WHATSAPP_SEND_MODE`, `WHATSAPP_AMBIENTE` e `WHATSAPP_CAMPAIGNS_LIVE` continuam em `simulacao` / `teste` / `false` até a sua liberação ([detalhes](WHATSAPP_COEXISTENCIA.md#4-travas-teste--produção)).
+
+A compilação usa mais memória que a execução: `npm run build` (scripts/build.mjs) ajusta sozinho o limite da compilação, funcione o serviço por Blueprint ou configurado à mão. O limite de 384 MB continua valendo para o CRM em execução (uso medido: cerca de 215 MB).

@@ -1,63 +1,86 @@
-# Integração oficial do WhatsApp com coexistência
+# WhatsApp Business no celular **e** no CRM (coexistência oficial da Meta)
 
-Objetivo: conectar o **número que você já usa no aplicativo WhatsApp Business** ao CRM pela **WhatsApp Cloud API oficial da Meta**, sem perder o aplicativo nem as conversas, usando o recurso de **coexistência** (App Business + Cloud API no mesmo número).
+**Resposta curta:** sim, é possível usar o mesmo número ao mesmo tempo no app WhatsApp Business do celular e no Ponto Digital CRM, pelo recurso oficial da Meta chamado **coexistência** (*WhatsApp Business App Coexistence*), que liga o número do app à WhatsApp Cloud API **sem migrar**, sem trocar de número e sem perder as conversas.
 
-> **Nada disso foi executado.** Nenhuma ação foi feita no seu número. Cada etapa marcada com 🔒 só acontece com a sua autorização expressa.
-> Não usamos APIs não oficiais, bibliotecas que imitam o WhatsApp Web nem automações de navegador.
+> Nenhuma ação foi feita no seu número. O CRM só usa integrações oficiais da Meta. A conexão acontece apenas quando um administrador clica em **Conectar** no CRM e você escaneia o QR Code **no próprio app** do celular.
 
-## Como funciona a coexistência
+## 1. Análise de compatibilidade (outubro/2026)
 
-- O número continua ativo no **aplicativo WhatsApp Business** no celular; ao mesmo tempo, passa a ser acessível pela **Cloud API**.
-- A conexão é feita por **Embedded Signup** (cadastro incorporado da Meta) oferecido por um **Parceiro de Soluções / Tech Provider** compatível. No final, você escaneia um QR Code no próprio aplicativo.
-- Durante o cadastro, o aplicativo pergunta se você quer **compartilhar o histórico** de conversas. Se autorizar, a Meta envia o histórico pelo webhook `history`.
-- Mensagens que você enviar **pelo aplicativo** chegam ao CRM pelo webhook `smb_message_echoes` (aparecem como "Enviada pelo app WhatsApp Business").
-- Contatos do aplicativo podem ser sincronizados pelo webhook `smb_app_state_sync`.
+| Requisito da Meta | Situação da Ponto Digital |
+| --- | --- |
+| Número já em uso no app **WhatsApp Business** | ✅ É o seu caso |
+| App **WhatsApp Business 2.24.17 ou superior** | Confira em *Configurações → Ajuda → Informações do app* (atualize pela loja se preciso) |
+| Código do país suportado | ✅ Brasil (+55) é suportado |
+| Uso ativo do número no app (parceiros citam pelo menos 7 dias de conversas reais) | Provável ✅ — a elegibilidade final é confirmada pela própria Meta durante a conexão |
+| Conexão feita por um **Tech Provider** ou **Parceiro de Soluções** da Meta, com *Embedded Signup* | Ver os caminhos A e B abaixo |
+| Webhook HTTPS que receba os eventos de coexistência | ✅ Pronto no CRM publicado no Render |
 
-**Condições e limitações mudam com o tempo** (países atendidos, versão mínima do app, tipos de mensagem não sincronizados, limites de envio, necessidade de abrir o app periodicamente). Antes de qualquer passo, confirmaremos as regras vigentes na documentação da Meta e com o parceiro escolhido.
+**O que muda no app depois da conexão (regras da Meta):**
+- O app continua no celular, com as mesmas conversas. É preciso **abrir o app pelo menos a cada 14 dias**, senão a Meta desfaz a conexão.
+- Aparelhos vinculados (WhatsApp Web / computador) são **desconectados na hora da conexão** e podem ser vinculados de novo. Mensagens enviadas pelo WhatsApp para Windows e por relógios não chegam ao CRM.
+- **Histórico:** até **6 meses** de conversas individuais, **uma única vez**, se você autorizar no app durante a conexão (e no prazo de 24h). **Grupos não são sincronizados.**
+- Mensagens temporárias e de visualização única ficam desativadas; listas de transmissão viram somente leitura; editar ou apagar mensagem não é repassado ao CRM.
+- Limite de envio pela API em coexistência: 20 mensagens por segundo (suficiente para atendimento).
+- **Custos:** mensagens enviadas pelo app continuam **gratuitas**. Pela API, a Meta cobra por **modelo (template)** entregue, conforme a tabela vigente para o Brasil — respostas em texto livre dentro da janela de 24h após a mensagem do cliente não são cobradas. Campanhas de marketing são o tipo mais caro.
+- Para desconectar a qualquer momento: no celular, **WhatsApp Business → Configurações → Conta → Plataforma comercial → Desconectar**. O app continua funcionando.
 
-## O que já está pronto no CRM
+Fontes: [Meta — Onboard WhatsApp Business app users](https://developers.facebook.com/documentation/business-messaging/whatsapp/embedded-signup/onboarding-business-app-users/), [Meta — Embedded Signup](https://developers.facebook.com/documentation/business-messaging/whatsapp/embedded-signup/overview/), [360dialog — Coexistence](https://docs.360dialog.com/partner/onboarding/whatsapp-coexistence), [YCloud — Coexistence](https://www.ycloud.com/blog/whatsapp-business-app-coexistence-meta-update), [ChakraHQ — suporte por país](https://chakrahq.com/product/whatsapp/tools/whatsapp-coexistence-support/). Desde 15/10/2026 a Meta aceita apenas a versão atual do Embedded Signup — o CRM já usa esse formato.
+
+## 2. Dois caminhos oficiais para conectar
+
+| | **A. Ponto Digital como Tech Provider** (recomendado) | **B. Parceiro de Soluções da Meta (BSP)** |
+| --- | --- | --- |
+| Como é | O app da própria Ponto Digital na Meta; o botão **Conectar** do CRM abre o Embedded Signup | O parceiro faz a conexão por coexistência e entrega acesso à Cloud API |
+| Custo fixo | Nenhum (só as mensagens da Meta) | Mensalidade do parceiro |
+| Prazo | Verificação da empresa + análise do app pela Meta (normalmente dias a algumas semanas) | Rápido (às vezes no mesmo dia) |
+| Controle | Total: a conta fica no seu portfólio e o token fica criptografado no CRM | Depende do parceiro (exija conta no **seu** portfólio e token próprio) |
+| Bônus | A agência pode oferecer o mesmo serviço aos clientes dela | — |
+
+No caminho B, o CRM usa o botão **Vincular número do servidor** (credenciais do parceiro nas variáveis do Render). O CRM fala a Cloud API padrão da Meta (`graph.facebook.com`); parceiros com API própria exigiriam adaptação.
+
+### Se a coexistência não estiver disponível para o seu número
+**Não fazemos migração convencional** (ela tiraria o número do app). Alternativas, todas com sua autorização:
+1. **Aguardar e tentar de novo** — atualizar o app, usar o número normalmente por mais alguns dias e repetir a conexão.
+2. **Segundo número só para a API** — o número atual segue no app como hoje e um número novo atende pelo CRM.
+3. **Migração convencional** — somente se você decidir, sabendo que o número sai do app.
+
+## 3. O que já está pronto no CRM
 
 | Item | Onde |
 | --- | --- |
-| Webhook com verificação (`GET hub.challenge`) e recebimento (`POST`) | `src/app/api/webhooks/whatsapp/route.ts` |
-| Validação da assinatura `X-Hub-Signature-256` (HMAC-SHA256 com o App Secret) antes de ler o conteúdo | `src/lib/whatsapp/signature.ts` |
-| Leitura dos campos `messages`, `statuses`, `smb_message_echoes`, `history`, `smb_app_state_sync` | `src/lib/whatsapp/events.ts` |
-| Processamento idempotente (eventos repetidos são ignorados), criação automática de cliente/conversa, status de entrega/leitura, descadastro por "SAIR" | `src/lib/data/repo.ts` → `applyWhatsAppEvents` |
-| Envio de texto e de modelos pela Graph API, com travas | `src/lib/whatsapp/client.ts` |
-| Regra da janela de 24h e uso obrigatório de modelos aprovados fora dela | `src/lib/inbox.ts`, tela de conversa |
-| Simuladores na interface que usam **o mesmo processador** dos webhooks reais | botões "Simular" na conversa e na campanha |
+| Botão oficial de conexão (Embedded Signup, fluxo de coexistência); **nunca** chama o registro do número | Configurações → WhatsApp Business |
+| Token da conexão guardado **criptografado** (AES-256-GCM) — ninguém o vê nem copia | tabela `whatsapp_accounts` (sem acesso para usuários) |
+| Pedido automático de sincronização de **contatos** e **histórico** logo após conectar (prazo da Meta: 24h) | `configuracoes/whatsapp/actions.ts` |
+| Webhook com assinatura `X-Hub-Signature-256` validada antes de ler o conteúdo | `api/webhooks/whatsapp` |
+| Gravação idempotente no Supabase por função segura do banco (sem duplicar mensagens) | `wa_ingest_event` / `wa_ingest_batch` |
+| Mensagens do cliente, ecos do app (o que você responde pelo celular), histórico, contatos, status de entrega e aprovação de modelos | `lib/whatsapp/events.ts` |
+| Imagens, áudios, vídeos e documentos (recebidos e enviados); arquivos baixados da Meta sob demanda, só para quem pode ver a conversa | `api/whatsapp/midia`, `api/whatsapp/enviar-midia` |
+| Cliente novo cadastrado automaticamente (sem presumir consentimento de marketing) e incluído no funil | banco |
+| Distribuição dos novos atendimentos: manual ou **rodízio** entre a equipe | Equipe e permissões |
+| Modelos enviados para análise da Meta e sincronizados | Modelos e respostas |
+| Sugestões de resposta por IA, sempre revisadas por uma pessoa | [IA.md](IA.md) |
 
-## Travas de segurança
+## 4. Travas: teste × produção
 
-| Variável | Padrão | Efeito |
+| Variável (Render) | Valor seguro | Efeito |
 | --- | --- | --- |
-| `WHATSAPP_SEND_MODE` | `simulacao` | Nenhuma mensagem sai para o WhatsApp. Só registra no CRM. |
-| `WHATSAPP_CAMPAIGNS_LIVE` | `false` | Campanhas nunca enviam de verdade. Nesta versão, campanhas reais são recusadas mesmo que a variável seja alterada. |
-| `NODE_ENV=test` | — | Testes automatizados nunca enviam, em nenhuma configuração. |
-| `WHATSAPP_APP_SECRET` ausente | — | O webhook responde 503 e não processa nada. |
+| `WHATSAPP_SEND_MODE` | `simulacao` | Nada é enviado. Com `live`, envia de verdade (respeitando as travas abaixo). |
+| `WHATSAPP_AMBIENTE` | `teste` | Em teste, o envio real só vai para `WHATSAPP_NUMEROS_TESTE` (celulares da equipe); clientes são recusados. `producao` libera clientes reais. |
+| `WHATSAPP_NUMEROS_TESTE` | celulares da equipe | Ex.: `5511999990000,5511988880000` |
+| `WHATSAPP_CAMPAIGNS_LIVE` | `false` | Campanhas sempre simuladas. `true` libera campanhas reais (máx. 250 contatos por execução, só com opt-in). |
 
-## Plano de execução
+Receber mensagens funciona em qualquer modo: o que você recebe nunca é bloqueado. A IA **apenas sugere** — não existe resposta automática nesta versão.
 
-1. **Elegibilidade** — conferir com um parceiro compatível se o seu número pode usar coexistência e quais os custos (a Meta cobra por conversa/mensagem conforme a categoria; o parceiro pode ter mensalidade). 🔒 *Contratar parceiro gera custo: só com sua autorização.*
-2. **Meta for Developers** — você cria (ou nós orientamos) o app do tipo Business e a conta WhatsApp Business (WABA) no seu Business Manager. Nenhuma alteração no número.
-3. **Publicar o CRM em HTTPS** (ex.: Render) — a Meta só entrega webhooks para endereço público. 🔒 *Publicação: só com sua autorização.*
-4. **Cadastrar segredos** no painel da hospedagem: `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_ACCESS_TOKEN` (token de usuário do sistema), `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_WABA_ID`. Nunca no código nem em mensagens.
-5. **Cadastrar o webhook** no app da Meta: URL `https://SEU-DOMINIO/api/webhooks/whatsapp`, token de verificação, e assinar `messages`, `smb_message_echoes`, `history`, `smb_app_state_sync`.
-6. **Onboarding com coexistência** — você escaneia o QR Code no app WhatsApp Business e escolhe se compartilha o histórico. 🔒 *Altera a configuração do seu número: só você executa, com a sua aprovação.*
-7. **Testes controlados** — `WHATSAPP_SEND_MODE=live` apenas para mensagens individuais para números internos da equipe. Campanhas continuam em simulação. 🔒
-8. **Modelos** — submeter os modelos à aprovação da Meta e sincronizar o status. 🔒
-9. **Liberar campanhas** — após revisão de modelos, público e custos. Exige uma alteração de código consciente além da variável. 🔒
+## 5. Passo a passo das ações que dependem de você
 
-## Teste local do webhook (sem a Meta)
+Caminho A. Faça **uma de cada vez**; me avise ao concluir cada uma, que eu confiro antes da próxima.
 
-Com `WHATSAPP_APP_SECRET` e `WHATSAPP_VERIFY_TOKEN` definidos no `.env.local`:
-
-```bash
-# Verificação
-curl "http://localhost:3000/api/webhooks/whatsapp?hub.mode=subscribe&hub.verify_token=SEU_TOKEN&hub.challenge=123"
-
-# Evento assinado
-BODY='{"object":"whatsapp_business_account","entry":[{"id":"1","changes":[{"field":"messages","value":{"messaging_product":"whatsapp","metadata":{"phone_number_id":"1"},"messages":[{"from":"5511900001000","id":"wamid.TESTE1","timestamp":"1761300000","type":"text","text":{"body":"Olá"}}]}}]}]}'
-SIG=$(printf '%s' "$BODY" | openssl dgst -sha256 -hmac "SEU_APP_SECRET" | sed 's/^.* //')
-curl -X POST http://localhost:3000/api/webhooks/whatsapp -H "Content-Type: application/json" -H "X-Hub-Signature-256: sha256=$SIG" -d "$BODY"
-```
+1. **Verificar a empresa na Meta.** Em [business.facebook.com](https://business.facebook.com) → ⚙️ **Configurações** → **Central de segurança** → **Iniciar verificação**. Envie CNPJ e comprovante de endereço da Ponto Digital. (Se já estiver verificada, pule.)
+2. **Criar o app da Ponto Digital.** Em [developers.facebook.com](https://developers.facebook.com) → **Meus apps** → **Criar app** → caso de uso **"Outro"** → tipo **"Empresa"** → nome "Ponto Digital CRM" → selecione o portfólio da Ponto Digital. No painel do app, em **Adicionar produtos**, clique em **Configurar** no **WhatsApp**.
+3. **Guardar os segredos no Render** (eu não preciso vê-los): no seu computador, na pasta do CRM, rode `npm run whatsapp:chave` (gera `WHATSAPP_TOKEN_KEY` e `WHATSAPP_VERIFY_TOKEN`). No app da Meta: **Configurações do app → Básico** → copie **ID do aplicativo** e **Chave secreta do aplicativo**. No Supabase: **Project Settings → API Keys** → copie a **secret key**. No Render: serviço **ponto-digital-crm → Environment → Add Environment Variable** e cadastre: `META_APP_ID`, `WHATSAPP_APP_SECRET`, `WHATSAPP_TOKEN_KEY`, `WHATSAPP_VERIFY_TOKEN`, `SUPABASE_SECRET_KEY`. Clique **Save, rebuild, and deploy**.
+4. **Ligar o webhook.** No app da Meta → **WhatsApp → Configuração** → **Webhook → Editar**: URL `https://ponto-digital-crm.onrender.com/api/webhooks/whatsapp` e o mesmo `WHATSAPP_VERIFY_TOKEN` → **Verificar e salvar**. Em **Campos do webhook**, clique **Assinar** em: `messages`, `smb_message_echoes`, `history`, `smb_app_state_sync`, `message_template_status_update`.
+5. **Criar a configuração do Embedded Signup.** No app → **Adicionar produto → Login do Facebook para Empresas** → **Configurações** → **Criar configuração** → escolha **Cadastro incorporado do WhatsApp (WhatsApp Embedded Signup)** → permissões `whatsapp_business_management` e `whatsapp_business_messaging` → salve e copie o **ID da configuração**. Em **Configurações do Login**, adicione `https://ponto-digital-crm.onrender.com` como domínio permitido. No Render, cadastre `META_ES_CONFIG_ID` com esse ID.
+6. **Tornar o app um Tech Provider.** No painel do app → **Revisão do app** → solicite **acesso avançado** para `whatsapp_business_management` e `whatsapp_business_messaging` e conclua o cadastro de **Tech Provider** que a Meta indicar. Aguarde a aprovação (a Meta avisa por e-mail).
+7. **Conectar o número** (🔒 altera a configuração do número — só você executa). No CRM: **WhatsApp Business** → marque a caixa de ciência → **Conectar meu WhatsApp Business (coexistência)** → entre com o Facebook da Ponto Digital → escolha conectar o **app WhatsApp Business existente** → no celular, escaneie o **QR Code** e decida se compartilha o histórico.
+8. **Testar com a equipe** (🔒). No Render: `WHATSAPP_NUMEROS_TESTE` com os celulares da equipe e `WHATSAPP_SEND_MODE=live` (mantendo `WHATSAPP_AMBIENTE=teste`). Mande mensagens dos celulares da equipe para o número da Ponto Digital e responda pelo CRM e pelo app.
+9. **Atender clientes reais** (🔒 sua aprovação final). No Render: `WHATSAPP_AMBIENTE=producao`. Campanhas continuam simuladas até você decidir `WHATSAPP_CAMPAIGNS_LIVE=true`.

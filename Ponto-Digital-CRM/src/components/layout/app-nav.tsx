@@ -12,6 +12,7 @@ import {
   MessageSquareText,
   MessagesSquare,
   ScrollText,
+  Sparkles,
   SquareKanban,
   UserCog,
   Users,
@@ -31,6 +32,7 @@ const NAV: { href: string; label: string; icon: typeof Users; perm?: Permission;
   { href: "/agenda", label: "Agenda", icon: CalendarCheck },
   { href: "/campanhas", label: "Campanhas", icon: Megaphone, perm: "campaigns:read" },
   { href: "/modelos", label: "Modelos e respostas", icon: MessageSquareText },
+  { href: "/ia", label: "Assistente de IA", icon: Sparkles, perm: "ai:manage" },
 ];
 const ADMIN: typeof NAV = [
   { href: "/equipe", label: "Equipe e permissões", icon: UserCog, perm: "users:manage" },

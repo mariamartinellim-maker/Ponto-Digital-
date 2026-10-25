@@ -114,7 +114,7 @@ function ensureConversation(db: Database, orgId: string, client: Client): Conver
 export function appendMessage(
   db: Database,
   conv: Conversation,
-  msg: { direction: "in" | "out"; origin: MessageOrigin; body: string; status: Message["status"]; waMessageId: string | null; authorId: string | null; createdAt?: string },
+  msg: { direction: "in" | "out"; origin: MessageOrigin; body: string; status: Message["status"]; waMessageId: string | null; authorId: string | null; createdAt?: string; media?: Message["media"]; aiAssisted?: boolean },
 ) {
   const m: Message = { id: randomUUID(), orgId: conv.orgId, conversationId: conv.id, createdAt: now(), ...msg };
   db.messages.push(m);
@@ -194,6 +194,15 @@ export async function applyWhatsAppEvents(orgId: string, envelopes: WaEnvelope[]
           }
           continue;
         }
+        if (ev.kind === "history_progress") continue;
+        if (ev.kind === "template_status") {
+          const t = db.templates.find((x) => x.orgId === orgId && x.name === ev.name && (!ev.language || x.language === ev.language));
+          if (t) {
+            t.status = ev.status;
+            if (ev.metaTemplateId) t.metaTemplateId = ev.metaTemplateId;
+          }
+          continue;
+        }
         if (ev.kind === "contact_sync") {
           stats.contacts++;
           if (ev.action === "add" && ev.phone) clientForPhone(db, orgId, ev.phone, ev.name);
@@ -209,7 +218,7 @@ export async function applyWhatsAppEvents(orgId: string, envelopes: WaEnvelope[]
           stats.inbound++;
           const client = clientForPhone(db, orgId, ev.from, ev.profileName);
           const conv = ensureConversation(db, orgId, client);
-          appendMessage(db, conv, { direction: "in", origin: "cliente", body: ev.text, status: "recebida", waMessageId: ev.waMessageId, authorId: null, createdAt: ts });
+          appendMessage(db, conv, { direction: "in", origin: "cliente", body: ev.text, status: "recebida", waMessageId: ev.waMessageId, authorId: null, createdAt: ts, media: ev.media });
           // Resposta a uma campanha executada nos últimos 7 dias
           const weekAgo = new Date(Date.now() - 7 * 86400_000).toISOString();
           for (const camp of db.campaigns.filter((c) => c.orgId === orgId && c.status === "concluida" && (c.executedAt ?? "") >= weekAgo)) {
@@ -229,12 +238,12 @@ export async function applyWhatsAppEvents(orgId: string, envelopes: WaEnvelope[]
           stats.echoes++;
           const client = clientForPhone(db, orgId, ev.to, null);
           const conv = ensureConversation(db, orgId, client);
-          appendMessage(db, conv, { direction: "out", origin: "app_business", body: ev.text, status: "enviada", waMessageId: ev.waMessageId, authorId: null, createdAt: ts });
+          appendMessage(db, conv, { direction: "out", origin: "app_business", body: ev.text, status: "enviada", waMessageId: ev.waMessageId, authorId: null, createdAt: ts, media: ev.media });
         } else if (ev.kind === "history") {
           stats.history++;
           const client = clientForPhone(db, orgId, ev.contact, null);
           const conv = ensureConversation(db, orgId, client);
-          appendMessage(db, conv, { direction: ev.direction, origin: "historico", body: ev.text, status: ev.direction === "in" ? "recebida" : "entregue", waMessageId: ev.waMessageId, authorId: null, createdAt: ts });
+          appendMessage(db, conv, { direction: ev.direction, origin: "historico", body: ev.text, status: ev.direction === "in" ? "recebida" : "entregue", waMessageId: ev.waMessageId, authorId: null, createdAt: ts, media: ev.media });
         }
       }
       db.webhookEvents.unshift({

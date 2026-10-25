@@ -1,10 +1,13 @@
 "use client";
 
-import { useActionState, useEffect, useMemo, useRef, useState } from "react";
-import { FlaskConical, Send, Zap } from "lucide-react";
+import { useActionState, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { FlaskConical, Paperclip, Send, Sparkles, UserRound, X, Zap } from "lucide-react";
 import { Button, Input, Notice, Select, cn } from "@/components/ui";
+import { STAGES } from "@/lib/data/types";
 import { renderTemplate, templateVariableCount } from "@/lib/segmentation";
 import { markReadAction, sendMessageAction, sendTemplateAction, simulateInboundAction } from "../actions";
+import { discardSuggestionAction, suggestReplyAction, type AiSuggestion } from "../ai-actions";
 
 interface QR { shortcut: string; title: string; body: string }
 interface Tpl { id: string; name: string; body: string; category: string }
@@ -24,6 +27,7 @@ export function Composer(props: {
   hasConsent: boolean;
   quickReplies: QR[];
   templates: Tpl[];
+  aiEnabled: boolean;
 }) {
   const [mode, setMode] = useState<"text" | "template">(props.windowOpen ? "text" : "template");
   return (
@@ -55,10 +59,16 @@ export function Composer(props: {
   );
 }
 
-function TextComposer({ conversationId, quickReplies }: { conversationId: string; quickReplies: QR[] }) {
+const STAGE_LABEL = Object.fromEntries(STAGES.map((s) => [s.id, s.label])) as Record<string, string>;
+
+function TextComposer({ conversationId, quickReplies, aiEnabled }: { conversationId: string; quickReplies: QR[]; aiEnabled: boolean }) {
   const [state, action, pending] = useActionState(sendMessageAction, undefined);
   const [text, setText] = useState("");
   const [showQR, setShowQR] = useState(false);
+  const [ai, setAi] = useState<Extract<AiSuggestion, { ok: true }> | null>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [thinking, startThinking] = useTransition();
+  const [attach, setAttach] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
   const lastOk = useRef<number | undefined>(undefined);
 
@@ -66,8 +76,23 @@ function TextComposer({ conversationId, quickReplies }: { conversationId: string
     if (state?.ok && state.ok !== lastOk.current) {
       lastOk.current = state.ok;
       setText("");
+      setAi(null);
     }
   }, [state]);
+
+  const askAi = () =>
+    startThinking(async () => {
+      setAiError(null);
+      const r = await suggestReplyAction(conversationId);
+      if (!r.ok) return setAiError(r.error);
+      setAi(r);
+      setText(r.text);
+    });
+  const discardAi = () => {
+    if (ai) void discardSuggestionAction(ai.id);
+    setAi(null);
+    setText("");
+  };
 
   const slash = text.startsWith("/") ? text.slice(1).toLowerCase() : null;
   const matches = useMemo(
@@ -79,7 +104,23 @@ function TextComposer({ conversationId, quickReplies }: { conversationId: string
   return (
     <form ref={formRef} action={action} className="relative p-3">
       <input type="hidden" name="conversationId" value={conversationId} />
+      {ai && <input type="hidden" name="aiSuggestionId" value={ai.id} />}
       {state?.error && <div className="mb-2"><Notice tone="red">{state.error}</Notice></div>}
+      {aiError && <div className="mb-2"><Notice tone="amber">{aiError}</Notice></div>}
+      {ai && (
+        <div className={cn("mb-2 flex items-start gap-2 rounded-xl px-3 py-2 text-[12.5px] ring-1", ai.needsHuman ? "bg-amber-50 text-amber-900 ring-amber-200" : "bg-violet-50 text-violet-900 ring-violet-200")}>
+          {ai.needsHuman ? <UserRound className="mt-0.5 size-4 shrink-0" /> : <Sparkles className="mt-0.5 size-4 shrink-0" />}
+          <p className="flex-1">
+            <strong>{ai.needsHuman ? "Atenção: decisão humana necessária. " : "Sugestão da IA — revise antes de enviar. "}</strong>
+            {ai.reason}
+            {ai.stage !== "manter" && STAGE_LABEL[ai.stage] && <span className="block text-[11.5px] opacity-80">Etapa sugerida no funil: {STAGE_LABEL[ai.stage]}</span>}
+          </p>
+          <button type="button" onClick={discardAi} className="rounded p-0.5 hover:bg-black/5" aria-label="Descartar sugestão" title="Descartar sugestão">
+            <X className="size-4" />
+          </button>
+        </div>
+      )}
+      {attach && <AttachForm conversationId={conversationId} caption={text} onDone={() => { setAttach(false); setText(""); }} onCancel={() => setAttach(false)} />}
       {open && (
         <div className="absolute bottom-full left-3 right-3 mb-1 max-h-64 overflow-y-auto rounded-xl border border-line bg-white p-1 shadow-pop scroll-thin">
           <p className="px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Respostas rápidas</p>
@@ -110,6 +151,27 @@ function TextComposer({ conversationId, quickReplies }: { conversationId: string
         >
           <Zap className="size-5" />
         </button>
+        <button
+          type="button"
+          onClick={() => setAttach((v) => !v)}
+          className="rounded-xl p-2.5 text-slate-500 hover:bg-slate-100 hover:text-brand-600"
+          title="Enviar imagem, áudio, vídeo ou documento"
+          aria-label="Anexar arquivo"
+        >
+          <Paperclip className="size-5" />
+        </button>
+        {aiEnabled && (
+          <button
+            type="button"
+            onClick={askAi}
+            disabled={thinking}
+            className="rounded-xl p-2.5 text-violet-600 hover:bg-violet-50 disabled:animate-pulse"
+            title="Sugerir resposta com IA (você revisa antes de enviar)"
+            aria-label="Sugerir resposta com IA"
+          >
+            <Sparkles className="size-5" />
+          </button>
+        )}
         <textarea
           name="body"
           value={text}
@@ -130,6 +192,40 @@ function TextComposer({ conversationId, quickReplies }: { conversationId: string
         </Button>
       </div>
     </form>
+  );
+}
+
+function AttachForm({ conversationId, caption, onDone, onCancel }: { conversationId: string; caption: string; onDone: () => void; onCancel: () => void }) {
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const submit = async () => {
+    const file = fileRef.current?.files?.[0];
+    if (!file) return setError("Selecione um arquivo.");
+    setSending(true);
+    setError(null);
+    const form = new FormData();
+    form.set("conversationId", conversationId);
+    form.set("caption", caption);
+    form.set("file", file);
+    const res = await fetch("/api/whatsapp/enviar-midia", { method: "POST", body: form }).catch(() => null);
+    const json = (await res?.json().catch(() => ({}))) as { error?: string } | undefined;
+    setSending(false);
+    if (!res?.ok) return setError(json?.error ?? "Falha no envio.");
+    onDone();
+    router.refresh();
+  };
+  return (
+    <div className="mb-2 rounded-xl border border-line bg-slate-50 p-2.5 text-[13px]">
+      {error && <div className="mb-2"><Notice tone="red">{error}</Notice></div>}
+      <div className="flex flex-wrap items-center gap-2">
+        <input ref={fileRef} type="file" name="file" aria-label="Arquivo" accept="image/jpeg,image/png,audio/*,video/mp4,video/3gpp,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt" className="min-w-0 flex-1 text-[13px]" />
+        <Button type="button" size="sm" onClick={submit} disabled={sending}>{sending ? "Enviando…" : "Enviar arquivo"}</Button>
+        <Button type="button" size="sm" variant="ghost" onClick={onCancel}>Cancelar</Button>
+      </div>
+      <p className="mt-1 text-[11.5px] text-slate-500">O texto digitado vira a legenda. Imagens até 5 MB; demais arquivos até 16 MB.</p>
+    </div>
   );
 }
 

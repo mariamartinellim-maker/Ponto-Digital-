@@ -13,6 +13,8 @@ export const PERMISSIONS = {
   "inbox:assign": "Transferir conversas",
   "quick_replies:manage": "Gerenciar respostas rápidas",
   "templates:manage": "Gerenciar modelos (templates)",
+  "ai:use": "Pedir sugestões de resposta à IA",
+  "ai:manage": "Editar a base de conhecimento da IA",
   "campaigns:read": "Ver campanhas",
   "campaigns:manage": "Criar e executar campanhas",
   "tasks:manage_all": "Gerenciar tarefas de toda a equipe",
@@ -34,6 +36,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "clients:write",
     "deals:write",
     "inbox:reply",
+    "ai:use",
     "campaigns:read",
   ],
 };
