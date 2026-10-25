@@ -20,6 +20,8 @@ export interface WaMedia {
   filename?: string;
   caption?: string;
   voice?: boolean;
+  /** Arquivo baixado para a biblioteca do CRM (WhatsApp Web experimental). */
+  assetId?: string;
 }
 
 export type WaEvent =

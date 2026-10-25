@@ -21,6 +21,12 @@ export const PERMISSIONS = {
   "users:manage": "Gerenciar usuários e permissões",
   "audit:read": "Ver registros de auditoria",
   "settings:manage": "Configurar integrações",
+  "media:read": "Usar a biblioteca de mídias",
+  "media:manage": "Enviar e excluir arquivos da biblioteca",
+  "sales:manage": "Registrar vendas",
+  "finance:manage": "Financeiro: confirmar comprovantes e lançamentos",
+  "production:manage": "Atualizar ordens de produção",
+  "guardian:manage": "Guardian: monitoramento, backups e recuperação",
 } as const;
 
 export type Permission = keyof typeof PERMISSIONS;
@@ -29,7 +35,7 @@ const ALL = Object.keys(PERMISSIONS) as Permission[];
 
 export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   admin: ALL,
-  gestor: ALL.filter((p) => !["users:manage", "audit:read", "settings:manage", "clients:delete"].includes(p)),
+  gestor: ALL.filter((p) => !["users:manage", "audit:read", "settings:manage", "clients:delete", "guardian:manage"].includes(p)),
   atendente: [
     "dashboard:view",
     "clients:read",
@@ -38,6 +44,9 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "inbox:reply",
     "ai:use",
     "campaigns:read",
+    "media:read",
+    "sales:manage",
+    "production:manage",
   ],
 };
 

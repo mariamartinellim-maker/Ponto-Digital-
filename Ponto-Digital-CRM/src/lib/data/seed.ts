@@ -394,5 +394,13 @@ export async function buildSeed(): Promise<Database> {
     passwordResets: [],
     webhookEvents: [],
     processedWaIds: [],
+    mediaAssets: [],
+    receipts: [],
+    sales: [],
+    financeEntries: [],
+    productionOrders: [],
+    guardianEvents: [],
+    aiKnowledge: [],
+    aiSuggestions: [],
   };
 }

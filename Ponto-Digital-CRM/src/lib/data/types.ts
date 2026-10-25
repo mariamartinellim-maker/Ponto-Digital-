@@ -120,6 +120,8 @@ export interface MessageMedia {
   voice?: boolean;
   /** Envio simulado: o arquivo não foi enviado à Meta. */
   simulated?: boolean;
+  /** Arquivo guardado na biblioteca do CRM (mídias do WhatsApp Web e envios a partir da biblioteca). */
+  assetId?: string;
 }
 export interface Message {
   id: string;
@@ -234,6 +236,157 @@ export interface WebhookEventLog {
   receivedAt: string;
 }
 
+// ---------------------------------------------------------------------------
+// Módulos operacionais: biblioteca, comprovantes, vendas, financeiro, produção, Guardian, IA (demo)
+// ---------------------------------------------------------------------------
+export type AssetType = "image" | "audio" | "video" | "document";
+export type AssetSource = "upload" | "whatsapp_web" | "whatsapp";
+export interface MediaAsset {
+  id: string;
+  orgId: string;
+  title: string;
+  type: AssetType;
+  mime: string;
+  size: number;
+  filename: string;
+  tags: string[];
+  source: AssetSource;
+  clientId: string | null;
+  /** Caminho do arquivo no armazenamento (disco local no modo demo, Supabase Storage no publicado). */
+  storageKey: string;
+  createdBy: string | null;
+  createdAt: string;
+}
+
+export type ReceiptStatus = "pendente" | "confirmado" | "rejeitado" | "duplicado";
+export type PaymentMethod = "pix" | "boleto" | "ted" | "cartao" | "dinheiro" | "outro";
+export interface ReceiptData {
+  valorCentavos: number | null;
+  dataPagamento: string | null;
+  pagador: string | null;
+  recebedor: string | null;
+  banco: string | null;
+  metodo: PaymentMethod | null;
+  idTransacao: string | null;
+  confianca: number;
+  observacao: string;
+}
+export interface Receipt {
+  id: string;
+  orgId: string;
+  mediaId: string;
+  clientId: string | null;
+  saleId: string | null;
+  status: ReceiptStatus;
+  data: ReceiptData | null;
+  /** "ia" = Claude, "simulador" = sem chave (testes), "manual" = digitado. */
+  analyzer: "ia" | "simulador" | "manual" | "pendente";
+  analysisError: string | null;
+  duplicateOf: string | null;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
+  createdBy: string | null;
+  createdAt: string;
+}
+
+export type SaleStatus = "aguardando_pagamento" | "pago" | "cancelada";
+export interface SaleItem {
+  description: string;
+  quantity: number;
+  unitCents: number;
+}
+export interface Sale {
+  id: string;
+  orgId: string;
+  number: number;
+  clientId: string;
+  dealId: string | null;
+  conversationId: string | null;
+  items: SaleItem[];
+  totalCents: number;
+  status: SaleStatus;
+  paymentMethod: PaymentMethod;
+  dueDate: string | null;
+  paidAt: string | null;
+  receiptId: string | null;
+  notes: string;
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type FinanceKind = "entrada" | "saida";
+export interface FinanceEntry {
+  id: string;
+  orgId: string;
+  kind: FinanceKind;
+  category: string;
+  description: string;
+  amountCents: number;
+  date: string;
+  saleId: string | null;
+  receiptId: string | null;
+  createdBy: string | null;
+  createdAt: string;
+}
+
+export type ProductionStage = "fila" | "producao" | "revisao" | "entregue" | "cancelada";
+export interface ProductionOrder {
+  id: string;
+  orgId: string;
+  number: number;
+  saleId: string | null;
+  clientId: string;
+  title: string;
+  checklist: { description: string; done: boolean }[];
+  stage: ProductionStage;
+  assigneeId: string | null;
+  dueDate: string | null;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+  deliveredAt: string | null;
+}
+
+export type GuardianLevel = "info" | "aviso" | "erro";
+export interface GuardianEvent {
+  id: string;
+  orgId: string | null;
+  level: GuardianLevel;
+  source: string;
+  message: string;
+  at: string;
+}
+
+export interface AiKnowledgeRecord {
+  orgId: string;
+  enabled: boolean;
+  about: string;
+  services: string;
+  prices: string;
+  portfolio: string;
+  tone: string;
+  faq: string;
+  rules: string;
+  updatedBy: string | null;
+  updatedAt: string;
+}
+export interface AiSuggestionRecord {
+  id: string;
+  orgId: string;
+  conversationId: string;
+  createdBy: string;
+  model: string;
+  suggestion: string;
+  needsHuman: boolean;
+  reason: string;
+  status: "sugerida" | "usada" | "descartada";
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  createdAt: string;
+}
+
 export interface Database {
   version: number;
   organizations: Organization[];
@@ -252,4 +405,15 @@ export interface Database {
   webhookEvents: WebhookEventLog[];
   /** IDs de mensagens WhatsApp já processadas (idempotência de webhooks). */
   processedWaIds: string[];
+  mediaAssets: MediaAsset[];
+  receipts: Receipt[];
+  sales: Sale[];
+  financeEntries: FinanceEntry[];
+  productionOrders: ProductionOrder[];
+  guardianEvents: GuardianEvent[];
+  aiKnowledge: AiKnowledgeRecord[];
+  aiSuggestions: AiSuggestionRecord[];
 }
+
+/** Coleções acrescentadas depois da versão 1 da base demo (criadas vazias em bases antigas). */
+export const LATER_COLLECTIONS = ["mediaAssets", "receipts", "sales", "financeEntries", "productionOrders", "guardianEvents", "aiKnowledge", "aiSuggestions"] as const;
