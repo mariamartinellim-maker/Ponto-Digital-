@@ -44,5 +44,5 @@ export async function proxy(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!api/webhooks|_next/static|_next/image|icons/|icon.svg|manifest.webmanifest|sw.js|robots.txt).*)"],
+  matcher: ["/((?!api/webhooks|api/health|_next/static|_next/image|icons/|icon.svg|manifest.webmanifest|sw.js|robots.txt).*)"],
 };
