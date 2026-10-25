@@ -16,9 +16,10 @@ const schema = z.object({
   DEMO_ADMIN_PASSWORD: z.string().min(10).optional(),
   DEMO_TEAM_PASSWORD: z.string().min(10).optional(),
 
-  NEXT_PUBLIC_SUPABASE_URL: z.string().url().optional(),
-  NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().optional(),
-  SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
+  // Supabase: só a URL e a chave PUBLICÁVEL (publishable/anon). Ficam apenas no servidor.
+  // A chave secreta (service_role) NÃO é usada nesta etapa.
+  SUPABASE_URL: z.string().url("SUPABASE_URL inválida (ex.: https://abcd1234.supabase.co).").optional(),
+  SUPABASE_PUBLISHABLE_KEY: z.string().min(20, "SUPABASE_PUBLISHABLE_KEY inválida.").optional(),
 
   // WhatsApp Cloud API (oficial da Meta). Todos opcionais até a etapa de integração.
   WHATSAPP_SEND_MODE: z.enum(["simulacao", "live"]).default("simulacao"),
@@ -48,12 +49,29 @@ export function env(): Env {
     throw new Error(`Configuração inválida do Ponto Digital CRM:\n${msg}`);
   }
   if (parsed.data.DATA_BACKEND === "supabase") {
-    throw new Error(
-      "DATA_BACKEND=supabase ainda não está ativo nesta versão. Use DATA_BACKEND=demo até a etapa de conexão com o Supabase.",
-    );
+    if (!parsed.data.SUPABASE_URL || !parsed.data.SUPABASE_PUBLISHABLE_KEY) {
+      throw new Error("DATA_BACKEND=supabase exige SUPABASE_URL e SUPABASE_PUBLISHABLE_KEY. Rode `npm run supabase:config`.");
+    }
+    if (isSecretKey(parsed.data.SUPABASE_PUBLISHABLE_KEY)) {
+      throw new Error(
+        "SUPABASE_PUBLISHABLE_KEY contém a chave SECRETA (service_role), que ignora a segurança do banco. Use a chave publishable/anon.",
+      );
+    }
   }
   cached = parsed.data;
   return cached;
+}
+
+/** Detecta a chave secreta do Supabase (nova "sb_secret_" ou JWT legado com role service_role). */
+export function isSecretKey(key: string) {
+  if (key.startsWith("sb_secret_")) return true;
+  const payload = key.split(".")[1];
+  if (!payload) return false;
+  try {
+    return JSON.parse(Buffer.from(payload, "base64url").toString("utf8")).role === "service_role";
+  } catch {
+    return false;
+  }
 }
 
 /** Status das integrações, sem expor valores secretos. */
@@ -61,7 +79,7 @@ export function integrationStatus() {
   const e = env();
   return {
     backend: e.DATA_BACKEND,
-    supabaseConfigured: Boolean(e.NEXT_PUBLIC_SUPABASE_URL && e.NEXT_PUBLIC_SUPABASE_ANON_KEY),
+    supabaseConfigured: Boolean(e.SUPABASE_URL && e.SUPABASE_PUBLISHABLE_KEY),
     whatsapp: {
       sendMode: e.WHATSAPP_SEND_MODE,
       campaignsLive: e.WHATSAPP_CAMPAIGNS_LIVE,

@@ -3,6 +3,7 @@
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { isSupabase, SUPABASE_PROXIMA_ETAPA } from "@/lib/supabase/server";
 import { authorize, clientIp } from "@/lib/auth/session";
 import { audit, now } from "@/lib/data/repo";
 import { mutate } from "@/lib/data/store";
@@ -17,6 +18,7 @@ const qrSchema = z.object({
 
 export async function saveQuickReplyAction(_: FormState, formData: FormData): Promise<FormState> {
   const user = await authorize("quick_replies:manage");
+  if (isSupabase()) return { error: SUPABASE_PROXIMA_ETAPA };
   const parsed = qrSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0]!.message };
   const v = parsed.data;
@@ -33,6 +35,7 @@ export async function saveQuickReplyAction(_: FormState, formData: FormData): Pr
 
 export async function deleteQuickReplyAction(formData: FormData) {
   const user = await authorize("quick_replies:manage");
+  if (isSupabase()) throw new Error(SUPABASE_PROXIMA_ETAPA);
   const id = String(formData.get("id"));
   await mutate((db) => {
     db.quickReplies = db.quickReplies.filter((q) => !(q.id === id && q.orgId === user.orgId));
@@ -53,6 +56,7 @@ const tplSchema = z.object({
  */
 export async function saveTemplateAction(_: FormState, formData: FormData): Promise<FormState> {
   const user = await authorize("templates:manage");
+  if (isSupabase()) return { error: SUPABASE_PROXIMA_ETAPA };
   const parsed = tplSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0]!.message };
   const v = parsed.data;
@@ -73,6 +77,7 @@ export async function saveTemplateAction(_: FormState, formData: FormData): Prom
 /** Apenas no modo demonstração: simula a resposta da Meta à análise do modelo. */
 export async function simulateTemplateReviewAction(formData: FormData) {
   const user = await authorize("templates:manage");
+  if (isSupabase()) throw new Error(SUPABASE_PROXIMA_ETAPA);
   const id = String(formData.get("id"));
   const status = formData.get("status") === "APPROVED" ? "APPROVED" : "REJECTED";
   await mutate((db) => {

@@ -1,3 +1,4 @@
+import { isSupabase } from "@/lib/supabase/server";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Check, CheckCheck, Clock, History, Smartphone, TriangleAlert } from "lucide-react";
@@ -164,7 +165,7 @@ export default async function ConversationPage({
           templates={d.templates.filter((t) => t.status === "APPROVED").map((t) => ({ id: t.id, name: t.name, body: t.body, category: t.category }))}
         />
       )}
-      <SimulateInbound conversationId={id} />
+      {!isSupabase() && <SimulateInbound conversationId={id} />}
     </InboxShell>
   );
 }

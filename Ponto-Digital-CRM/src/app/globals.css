@@ -96,6 +96,7 @@
     --color-sky-500: oklch(68.5% .169 237.323);
     --color-sky-600: oklch(58.8% .158 241.966);
     --color-sky-700: oklch(50% .134 242.749);
+    --color-sky-900: oklch(39.1% .09 240.876);
     --color-fuchsia-100: oklch(95.2% .037 318.852);
     --color-fuchsia-700: oklch(51.8% .253 323.949);
     --color-slate-50: oklch(98.4% .003 247.858);
@@ -666,6 +667,10 @@
 
   .inline-flex {
     display: inline-flex;
+  }
+
+  .table {
+    display: table;
   }
 
   .field-sizing-content {
@@ -1254,6 +1259,10 @@
 
   .border-red-400 {
     border-color: var(--color-red-400);
+  }
+
+  .border-sky-200 {
+    border-color: var(--color-sky-200);
   }
 
   .border-slate-300 {
@@ -1930,6 +1939,10 @@
 
   .text-sky-700 {
     color: var(--color-sky-700);
+  }
+
+  .text-sky-900 {
+    color: var(--color-sky-900);
   }
 
   .text-slate-300 {

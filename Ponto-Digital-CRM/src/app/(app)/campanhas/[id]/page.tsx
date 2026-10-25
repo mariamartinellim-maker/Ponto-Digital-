@@ -1,3 +1,4 @@
+import { ReadOnlyNotice } from "@/components/layout/demo-banner";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, FlaskConical, Play } from "lucide-react";
@@ -61,6 +62,7 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
         description={`Modelo ${tpl?.name ?? "—"} · criada em ${formatDateTime(camp.createdAt)}${camp.executedAt ? ` · executada em ${formatDateTime(camp.executedAt)}` : ""}`}
         actions={<Badge tone={camp.status === "concluida" ? "green" : camp.status === "cancelada" ? "red" : "slate"}>{camp.status === "concluida" ? "Executada (simulação)" : camp.status === "cancelada" ? "Cancelada" : "Rascunho"}</Badge>}
       />
+      <ReadOnlyNotice />
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_380px]">
         <div className="space-y-6">

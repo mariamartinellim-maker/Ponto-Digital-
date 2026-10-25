@@ -3,6 +3,7 @@
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { isSupabase, SUPABASE_PROXIMA_ETAPA } from "@/lib/supabase/server";
 import { authorize, clientIp } from "@/lib/auth/session";
 import { hashPassword, randomToken } from "@/lib/auth/password";
 import { audit, now } from "@/lib/data/repo";
@@ -21,6 +22,7 @@ const createSchema = z.object({
 
 export async function createUserAction(_: TeamState, formData: FormData): Promise<TeamState> {
   const admin = await authorize("users:manage");
+  if (isSupabase()) return { error: SUPABASE_PROXIMA_ETAPA };
   const parsed = createSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0]!.message };
   const v = parsed.data;
@@ -45,6 +47,7 @@ function guardLastAdmin(users: { role: Role; active: boolean; orgId: string; id:
 
 export async function updateUserAction(formData: FormData) {
   const admin = await authorize("users:manage");
+  if (isSupabase()) throw new Error(SUPABASE_PROXIMA_ETAPA);
   const id = String(formData.get("id"));
   const op = String(formData.get("op"));
   let details = op;
@@ -70,6 +73,7 @@ export async function updateUserAction(formData: FormData) {
 
 export async function resetUserPasswordAction(_: TeamState, formData: FormData): Promise<TeamState> {
   const admin = await authorize("users:manage");
+  if (isSupabase()) return { error: SUPABASE_PROXIMA_ETAPA };
   const id = String(formData.get("id"));
   const pw = tempPassword();
   const hash = await hashPassword(pw);

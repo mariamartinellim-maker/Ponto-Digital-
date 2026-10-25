@@ -49,7 +49,9 @@ export function ForgotForm() {
 }
 
 export function ResetForm() {
-  const token = useSearchParams().get("token") ?? "";
+  const params = useSearchParams();
+  const token = params.get("token") ?? "";
+  const linkError = params.get("erro") === "link";
   const [state, action, pending] = useActionState(resetPasswordAction, undefined);
   if (state?.ok) {
     return (
@@ -62,7 +64,8 @@ export function ResetForm() {
   return (
     <form action={action} className="space-y-4">
       <input type="hidden" name="token" value={token} />
-      {!token && <Notice tone="amber">Link incompleto. Abra o link recebido por e-mail.</Notice>}
+      {linkError && <Notice tone="red">Link inválido ou expirado. Solicite um novo em “Esqueci minha senha”.</Notice>}
+      {!token && !linkError && <Notice tone="amber">Link incompleto. Abra o link recebido por e-mail.</Notice>}
       {state?.error && <Notice tone="red">{state.error}</Notice>}
       <Field label="Nova senha" htmlFor="password" hint="Mínimo de 10 caracteres, com letras e números.">
         <Input id="password" name="password" type="password" autoComplete="new-password" required minLength={10} />

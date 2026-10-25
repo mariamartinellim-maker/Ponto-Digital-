@@ -1,3 +1,4 @@
+import { ReadOnlyNotice } from "@/components/layout/demo-banner";
 import { Trash2, Zap } from "lucide-react";
 import { Badge, Button, Card, CardHeader, Field, Input, Notice, PageHeader, Select, Textarea } from "@/components/ui";
 import { ActionForm } from "@/components/ui/action-form";
@@ -29,6 +30,7 @@ export default async function TemplatesPage() {
         title="Modelos e respostas rápidas"
         description="Respostas rápidas agilizam o atendimento. Modelos (templates) aprovados pela Meta são obrigatórios para campanhas e para retomar conversas após 24h."
       />
+      <ReadOnlyNotice />
       <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-2">
         <Card>
           <CardHeader title={<span className="flex items-center gap-2"><Zap className="size-4 text-coral-500" /> Respostas rápidas</span>} description="Digite / na conversa para inserir." />

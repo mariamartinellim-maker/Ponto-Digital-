@@ -3,6 +3,7 @@
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { isSupabase, SUPABASE_PROXIMA_ETAPA } from "@/lib/supabase/server";
 import { authorize, clientIp } from "@/lib/auth/session";
 import { audit, now } from "@/lib/data/repo";
 import { mutate } from "@/lib/data/store";
@@ -22,6 +23,7 @@ const schema = z.object({
 
 export async function createTaskAction(_: TaskState, formData: FormData): Promise<TaskState> {
   const user = await authorize();
+  if (isSupabase()) return { error: SUPABASE_PROXIMA_ETAPA };
   const parsed = schema.safeParse({
     title: formData.get("title") ?? "",
     type: formData.get("type") ?? "outro",
@@ -49,6 +51,7 @@ export async function createTaskAction(_: TaskState, formData: FormData): Promis
 
 export async function toggleTaskAction(formData: FormData) {
   const user = await authorize();
+  if (isSupabase()) throw new Error(SUPABASE_PROXIMA_ETAPA);
   const id = String(formData.get("id"));
   await mutate((db) => {
     const t = db.tasks.find((x) => x.id === id && x.orgId === user.orgId);
@@ -61,6 +64,7 @@ export async function toggleTaskAction(formData: FormData) {
 
 export async function deleteTaskAction(formData: FormData) {
   const user = await authorize();
+  if (isSupabase()) throw new Error(SUPABASE_PROXIMA_ETAPA);
   const id = String(formData.get("id"));
   await mutate((db) => {
     const t = db.tasks.find((x) => x.id === id && x.orgId === user.orgId);

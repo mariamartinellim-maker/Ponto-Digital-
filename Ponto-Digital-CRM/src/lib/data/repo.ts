@@ -3,6 +3,8 @@ import { randomUUID } from "node:crypto";
 import { normalizePhone, phoneDedupKey } from "../phone";
 import { isOptOutMessage } from "../segmentation";
 import type { WaEnvelope } from "../whatsapp/events";
+import { loadOrgData } from "../supabase/data";
+import { isSupabase, supabaseServer } from "../supabase/server";
 import { getDb, mutate } from "./store";
 import type {
   AuditLog,
@@ -29,6 +31,7 @@ export function publicUser(u: Database["users"][number]): PublicUser {
 }
 
 export async function scoped(orgId: string) {
+  if (isSupabase()) return loadOrgData(orgId);
   const db = await getDb();
   const by = <T extends { orgId: string }>(rows: T[]) => rows.filter((r) => r.orgId === orgId);
   return {
@@ -50,6 +53,21 @@ export async function scoped(orgId: string) {
 export async function audit(
   entry: Omit<AuditLog, "id" | "at" | "details" | "ip"> & { details?: string; ip?: string | null },
 ) {
+  if (isSupabase()) {
+    // No banco, cada usuário só registra as próprias ações; data e IP são definidos pelo sistema.
+    if (!entry.userId) return;
+    const sb = await supabaseServer();
+    const { error } = await sb.from("audit_logs").insert({
+      org_id: entry.orgId,
+      user_id: entry.userId,
+      action: entry.action,
+      entity: entry.entity,
+      entity_id: entry.entityId,
+      details: (entry.details ?? "").slice(0, 2000),
+    });
+    if (error) console.warn("[auditoria] não registrada:", error.message);
+    return;
+  }
   await mutate((db) => {
     db.auditLogs.unshift({ id: randomUUID(), at: now(), details: "", ip: null, ...entry });
     if (db.auditLogs.length > 5000) db.auditLogs.length = 5000;

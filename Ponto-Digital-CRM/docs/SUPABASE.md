@@ -37,9 +37,37 @@ select o.name, p.name, p.email, p.role from public.organizations o join public.p
 
 Deve mostrar uma linha: Ponto Digital · seu nome · seu e-mail · admin.
 
-## 5. Chaves para a etapa de conexão
+## 5. Conectar o CRM ao Supabase (Windows)
 
-Em **Project Settings → API**: a *Project URL*, a chave *anon/publishable* e a *service_role/secret*. Coloque-as **somente** no `.env.local` (ou no painel da hospedagem) — nunca em mensagens, e-mails ou no código. A chave `service_role` ignora o RLS: só o servidor a usa.
+O CRM usa apenas a **URL do projeto** e a **chave publicável** (`sb_publishable_...` ou a antiga `anon`). A chave **secreta** (`sb_secret_...` / `service_role`) **não é usada** — se for colada por engano, o CRM recusa.
+
+1. **Liberar o endereço de retorno da recuperação de senha** — no Supabase: *Authentication → URL Configuration*:
+   - *Site URL*: `http://localhost:3000`
+   - *Redirect URLs* → *Add URL*: `http://localhost:3000/**`
+2. **Copiar a URL e a chave publicável** — *Project Settings → API Keys* (ou *Data API*): copie a *Project URL* e a *Publishable key*.
+3. **Rodar o assistente** — no PowerShell, dentro da pasta `Ponto-Digital-CRM`:
+   ```powershell
+   npm run supabase:config
+   ```
+   Cole a URL, pressione Enter, cole a chave e pressione Enter. O assistente testa a conexão, guarda um backup do `.env.local` e ativa o modo Supabase. Nenhuma outra configuração (senhas, segredos) é alterada.
+4. **Iniciar o CRM** — `npm run dev:webpack` e entre com o **e-mail e a senha do seu usuário do Supabase**.
+
+Para voltar aos dados demonstrativos locais (nada é apagado): `npm run modo:demo`. Para voltar ao Supabase: `npm run modo:supabase`. Sempre reinicie o CRM depois de trocar.
+
+### O que já funciona com o Supabase
+
+| Módulo | Situação |
+| --- | --- |
+| Login, sair, recuperação de senha (e-mail enviado pelo Supabase) | ✅ |
+| Dashboard | ✅ leitura |
+| Clientes: cadastro, edição, consentimento, importação CSV, exportação LGPD | ✅ |
+| Funil comercial: mover etapas, nova oportunidade | ✅ |
+| Atendimento: conversas, envio (simulado), respostas rápidas, responsável, resolver | ✅ |
+| Agenda, Campanhas, Modelos, Equipe | 👁️ somente leitura (gravação na próxima etapa) |
+| Anonimização LGPD e mensagens recebidas do WhatsApp | próxima etapa (exigem função segura no servidor) |
+
+Novos usuários da equipe, por enquanto: *Authentication → Users → Add user* e, no SQL Editor,
+`insert into public.profiles (id, org_id, name, email, role) select u.id, p.org_id, 'Nome', u.email, 'atendente' from auth.users u, public.profiles p where u.email = 'pessoa@dominio.com' and p.email = 'seu-email@dominio.com';`
 
 ## O que o esquema garante (testado em `supabase/tests/rls-test.sql` — 58 verificações)
 

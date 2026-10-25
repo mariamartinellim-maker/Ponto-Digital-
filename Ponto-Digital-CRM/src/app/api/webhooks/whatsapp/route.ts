@@ -3,6 +3,7 @@ import { connection, NextResponse, type NextRequest } from "next/server";
 import { applyWhatsAppEvents } from "@/lib/data/repo";
 import { getDb } from "@/lib/data/store";
 import { env } from "@/lib/env";
+import { isSupabase } from "@/lib/supabase/server";
 import { rateLimit } from "@/lib/rate-limit";
 import { parseWebhook } from "@/lib/whatsapp/events";
 import { verifyMetaSignature } from "@/lib/whatsapp/signature";
@@ -38,6 +39,8 @@ export async function POST(req: NextRequest) {
 
   const secret = env().WHATSAPP_APP_SECRET;
   if (!secret) return new NextResponse("Webhook não configurado", { status: 503 });
+  // No Supabase, o processamento de webhooks será ligado na etapa de integração do WhatsApp.
+  if (isSupabase()) return new NextResponse("Webhook ainda não disponível no modo Supabase", { status: 503 });
 
   const length = Number(req.headers.get("content-length") ?? 0);
   if (length > MAX_BODY) return new NextResponse("Payload Too Large", { status: 413 });

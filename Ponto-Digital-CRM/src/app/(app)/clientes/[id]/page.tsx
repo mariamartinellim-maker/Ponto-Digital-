@@ -1,3 +1,4 @@
+import { isSupabase } from "@/lib/supabase/server";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Download, MessagesSquare, ShieldCheck } from "lucide-react";
@@ -163,7 +164,7 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
             </ul>
           </Card>
 
-          {can(user.role, "clients:delete") && (
+          {can(user.role, "clients:delete") && !isSupabase() && (
             <Card className="border-red-200">
               <CardHeader title="Eliminação de dados (LGPD)" description="Anonimiza o cadastro e apaga as conversas. Não pode ser desfeito." />
               <form action={anonymizeClientAction} className="flex gap-2 p-5">

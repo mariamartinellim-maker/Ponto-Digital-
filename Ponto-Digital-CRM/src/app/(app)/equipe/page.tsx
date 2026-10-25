@@ -1,3 +1,4 @@
+import { ReadOnlyNotice } from "@/components/layout/demo-banner";
 import { Check, Minus } from "lucide-react";
 import { Avatar, Badge, Button, Card, CardHeader, Field, Input, PageHeader, Select } from "@/components/ui";
 import { ActionForm } from "@/components/ui/action-form";
@@ -20,6 +21,7 @@ export default async function TeamPage() {
   return (
     <>
       <PageHeader title="Equipe e permissões" description="Crie acessos individuais para cada pessoa da equipe. Nunca compartilhe logins." />
+      <ReadOnlyNotice />
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_360px]">
         <Card>
           <CardHeader title="Usuários" description={`${d.users.filter((u) => u.active).length} ativos`} />

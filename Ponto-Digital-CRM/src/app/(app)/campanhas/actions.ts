@@ -4,8 +4,9 @@ import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { isSupabase, SUPABASE_PROXIMA_ETAPA } from "@/lib/supabase/server";
 import { authorize, clientIp } from "@/lib/auth/session";
-import { appendMessage, applyWhatsAppEvents, audit, now } from "@/lib/data/repo";
+import { appendMessage, applyWhatsAppEvents, audit, now, scoped } from "@/lib/data/repo";
 import { getDb, mutate } from "@/lib/data/store";
 import { STAGES, type Segment, type Stage } from "@/lib/data/types";
 import { env } from "@/lib/env";
@@ -23,8 +24,8 @@ const segmentSchema = z.object({
 export async function previewAudienceAction(segment: Segment) {
   const user = await authorize("campaigns:manage");
   const seg = segmentSchema.parse(segment);
-  const db = await getDb();
-  const a = resolveAudience(seg, db.clients.filter((c) => c.orgId === user.orgId), db.deals.filter((d) => d.orgId === user.orgId));
+  const d = await scoped(user.orgId);
+  const a = resolveAudience(seg, d.clients, d.deals);
   return {
     eligible: a.eligible.length,
     noConsent: a.excludedNoConsent.length,
@@ -37,6 +38,7 @@ export type CampaignFormState = { error?: string } | undefined;
 
 export async function createCampaignAction(_: CampaignFormState, formData: FormData): Promise<CampaignFormState> {
   const user = await authorize("campaigns:manage");
+  if (isSupabase()) return { error: SUPABASE_PROXIMA_ETAPA };
   const name = String(formData.get("name") ?? "").trim().slice(0, 120);
   const templateId = String(formData.get("templateId") ?? "");
   if (name.length < 3) return { error: "Dê um nome à campanha." };
@@ -65,6 +67,7 @@ export async function createCampaignAction(_: CampaignFormState, formData: FormD
  */
 export async function runCampaignAction(formData: FormData) {
   const user = await authorize("campaigns:manage");
+  if (isSupabase()) throw new Error(SUPABASE_PROXIMA_ETAPA);
   const id = String(formData.get("id"));
   if (formData.get("confirm") !== "on") throw new Error("Confirme a execução.");
   if (env().WHATSAPP_CAMPAIGNS_LIVE) {
@@ -116,6 +119,7 @@ export async function runCampaignAction(formData: FormData) {
  */
 export async function simulateStatusesAction(formData: FormData) {
   const user = await authorize("campaigns:manage");
+  if (isSupabase()) throw new Error(SUPABASE_PROXIMA_ETAPA);
   const id = String(formData.get("id"));
   const db = await getDb();
   const camp = db.campaigns.find((c) => c.id === id && c.orgId === user.orgId);
@@ -136,6 +140,7 @@ export async function simulateStatusesAction(formData: FormData) {
 
 export async function cancelCampaignAction(formData: FormData) {
   const user = await authorize("campaigns:manage");
+  if (isSupabase()) throw new Error(SUPABASE_PROXIMA_ETAPA);
   const id = String(formData.get("id"));
   await mutate((db) => {
     const camp = db.campaigns.find((c) => c.id === id && c.orgId === user.orgId);

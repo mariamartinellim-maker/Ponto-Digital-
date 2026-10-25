@@ -1,3 +1,4 @@
+import { ReadOnlyNotice } from "@/components/layout/demo-banner";
 import Link from "next/link";
 import { Megaphone, Plus } from "lucide-react";
 import { Badge, buttonClass, Card, EmptyState, Notice, PageHeader } from "@/components/ui";
@@ -35,6 +36,7 @@ export default async function CampaignsPage() {
           )
         }
       />
+      <ReadOnlyNotice />
       <div className="mb-6">
         <Notice tone="amber" title="Campanhas em modo simulação">
           Nenhuma mensagem é enviada de verdade nesta versão. O envio real só será habilitado após a integração oficial e a sua autorização expressa.

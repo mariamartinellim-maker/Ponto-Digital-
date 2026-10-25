@@ -6,6 +6,8 @@ import { z } from "zod";
 import { authorize, clientIp } from "@/lib/auth/session";
 import { audit, now } from "@/lib/data/repo";
 import { mutate } from "@/lib/data/store";
+import * as sb from "@/lib/supabase/ops";
+import { isSupabase } from "@/lib/supabase/server";
 import { STAGES, type Stage } from "@/lib/data/types";
 import { parseMoneyToCents } from "@/lib/format";
 
@@ -14,7 +16,12 @@ const stageIds = STAGES.map((s) => s.id) as [Stage, ...Stage[]];
 export async function moveDealAction(dealId: string, stage: Stage) {
   const user = await authorize("deals:write");
   const target = z.enum(stageIds).parse(stage);
-  const from = await mutate((db) => {
+  let from: Stage;
+  if (isSupabase()) {
+    const r = await sb.moveDeal(dealId, target);
+    if (!r.ok) throw new Error(r.error);
+    from = r.data;
+  } else from = await mutate((db) => {
     const deal = db.deals.find((d) => d.id === dealId && d.orgId === user.orgId);
     if (!deal) throw new Error("Oportunidade não encontrada.");
     const prev = deal.stage;
@@ -38,6 +45,13 @@ export async function saveDealAction(_: DealFormState, formData: FormData): Prom
   const value = parseMoneyToCents(String(formData.get("value") ?? "0"));
   if (!title) return { error: "Informe o título." };
   if (value === null) return { error: "Valor inválido." };
+  if (isSupabase()) {
+    const r = await sb.saveDeal(user, { id: id || undefined, clientId, title, valueCents: value });
+    if (!r.ok) return { error: r.error };
+    await audit({ orgId: user.orgId, userId: user.id, action: id ? "funil.oportunidade_editada" : "funil.oportunidade_criada", entity: "oportunidade", entityId: id || null, details: title });
+    revalidatePath("/funil");
+    return { ok: true };
+  }
   const ok = await mutate((db) => {
     if (id) {
       const deal = db.deals.find((d) => d.id === id && d.orgId === user.orgId);

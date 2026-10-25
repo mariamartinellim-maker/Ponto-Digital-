@@ -2,7 +2,7 @@
 
 CRM da agência **Ponto Digital**: clientes, funil comercial, atendimento pelo WhatsApp (API oficial da Meta), campanhas com consentimento, agenda, equipe com permissões e auditoria. Funciona no computador e no celular e pode ser instalado como aplicativo (PWA).
 
-> **Versão atual: 1ª versão funcional em modo demonstração.** Os dados são fictícios e ficam em `.data/demo-db.json` no seu computador. **Nenhuma mensagem de WhatsApp é enviada** — envios e campanhas são simulados. O banco Supabase e a integração oficial do WhatsApp entram nas próximas etapas, somente com a sua autorização.
+> **Versão atual: 1ª versão funcional em modo demonstração.** Os dados são fictícios e ficam em `.data/demo-db.json` no seu computador. **Nenhuma mensagem de WhatsApp é enviada** — envios e campanhas são simulados. Já pode ser conectado ao **Supabase** (`npm run supabase:config`); a integração oficial do WhatsApp entra numa próxima etapa, somente com a sua autorização.
 
 ![Dashboard](docs/screenshots/02-dashboard.png)
 
@@ -145,6 +145,6 @@ Detalhes em [docs/SEGURANCA_LGPD.md](docs/SEGURANCA_LGPD.md) e [docs/WHATSAPP_CO
 ## Próximas etapas
 
 1. **Sua aprovação desta primeira versão.**
-2. **Supabase**: criar o projeto e aplicar o esquema seguindo [docs/SUPABASE.md](docs/SUPABASE.md), trocar `DATA_BACKEND` para `supabase` e ligar o Supabase Auth (e-mails de recuperação). Preciso que você crie o projeto e me passe a URL e as chaves pelo `.env.local` — nunca por mensagem.
+2. **Supabase** ✅ esquema aplicado e CRM integrado (login, clientes, funil e atendimento). Para conectar: `npm run supabase:config` — passo a passo em [docs/SUPABASE.md](docs/SUPABASE.md). As chaves ficam só no `.env.local`, nunca em mensagens.
 3. **Hospedagem** (ex.: Vercel) com domínio HTTPS — só com sua autorização, pois publica o sistema.
 4. **WhatsApp oficial com coexistência** — ver o plano em `docs/WHATSAPP_COEXISTENCIA.md`. Nenhuma alteração no seu número sem a sua aprovação.

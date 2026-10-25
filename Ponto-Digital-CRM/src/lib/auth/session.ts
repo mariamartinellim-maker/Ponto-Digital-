@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { cache } from "react";
 import { env } from "../env";
 import { getDb } from "../data/store";
+import { isSupabase, supabaseServer } from "../supabase/server";
 import type { PublicUser, User } from "../data/types";
 import { can, type Permission } from "../permissions";
 import { SESSION_COOKIE, SESSION_TTL_SECONDS, signSession, verifySession } from "./token";
@@ -18,6 +19,7 @@ function toPublic(u: User, orgName: string): SessionUser {
 
 /** Lê e valida a sessão (assinatura, expiração, usuário ativo e versão da sessão). */
 export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
+  if (isSupabase()) return getSupabaseSessionUser();
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   const payload = await verifySession(token, env().SESSION_SECRET);
   if (!payload) return null;
@@ -27,6 +29,34 @@ export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
   const org = db.organizations.find((o) => o.id === user.orgId);
   return toPublic(user, org?.name ?? "");
 });
+
+/**
+ * Modo Supabase: valida o usuário no Supabase Auth (getUser consulta o servidor de
+ * autenticação) e lê o perfil pelo RLS. Usuário sem perfil ou desativado = sem acesso.
+ */
+async function getSupabaseSessionUser(): Promise<SessionUser | null> {
+  const sb = await supabaseServer();
+  const { data: auth, error } = await sb.auth.getUser();
+  if (error || !auth.user) return null;
+  const { data: p } = await sb
+    .from("profiles")
+    .select("id,org_id,name,email,role,active,created_at,last_login_at")
+    .eq("id", auth.user.id)
+    .maybeSingle();
+  if (!p || !p.active) return null;
+  const { data: org } = await sb.from("organizations").select("name").eq("id", p.org_id).maybeSingle();
+  return {
+    id: p.id,
+    orgId: p.org_id,
+    name: p.name,
+    email: p.email,
+    role: p.role,
+    active: p.active,
+    createdAt: p.created_at,
+    lastLoginAt: p.last_login_at,
+    orgName: org?.name ?? "",
+  };
+}
 
 /** Data Access Layer: exige usuário autenticado (e, opcionalmente, uma permissão). */
 export async function requireUser(permission?: Permission): Promise<SessionUser> {

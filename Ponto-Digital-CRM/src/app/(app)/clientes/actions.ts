@@ -6,7 +6,9 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { authorize, clientIp } from "@/lib/auth/session";
 import { analyzeCsv, type ImportAnalysis } from "@/lib/csv";
-import { audit, findClientByPhone, now, setConsent } from "@/lib/data/repo";
+import { audit, findClientByPhone, now, scoped, setConsent } from "@/lib/data/repo";
+import * as sb from "@/lib/supabase/ops";
+import { isSupabase } from "@/lib/supabase/server";
 import { getDb, mutate } from "@/lib/data/store";
 import { normalizePhone } from "@/lib/phone";
 
@@ -51,6 +53,20 @@ export async function saveClientAction(_: ClientFormState, formData: FormData): 
   const v = parsed.data;
   const phone = normalizePhone(v.phone);
   if (!phone) return { error: "Telefone inválido.", fieldErrors: { phone: "Use DDD + número, ex.: (11) 99999-0000" } };
+
+  if (isSupabase()) {
+    const dup = await sb.findClientByPhone(phone);
+    if (dup && dup.id !== id) {
+      return { error: `Já existe um cliente com este telefone: ${dup.name}.`, fieldErrors: { phone: "Telefone já cadastrado" } };
+    }
+    const input = { name: v.name, phone, email: v.email, city: v.city, services: v.services, tags: tagsFrom(v.tags), notes: v.notes, ownerId: v.ownerId || null };
+    const r = id ? await sb.updateClient(user, id, input) : await sb.createClient(user, input, formData.get("consent") === "on");
+    if (!r.ok) return { error: r.error };
+    const savedId = id || (r.data as string);
+    await audit({ orgId: user.orgId, userId: user.id, action: id ? "cliente.editado" : "cliente.criado", entity: "cliente", entityId: savedId });
+    revalidatePath("/clientes");
+    redirect(`/clientes/${savedId}`);
+  }
 
   const db = await getDb();
   const dup = findClientByPhone(db, user.orgId, phone);
@@ -104,6 +120,13 @@ export async function updateConsentAction(formData: FormData) {
   const id = String(formData.get("id"));
   const status = formData.get("status") === "opt_in" ? "opt_in" : "opt_out";
   const note = String(formData.get("note") ?? "").slice(0, 500) || (status === "opt_in" ? "Consentimento confirmado pelo cliente." : "Descadastro solicitado.");
+  if (isSupabase()) {
+    const r = await sb.addConsent(user, id, status, "manual", note);
+    if (!r.ok) throw new Error(r.error);
+    await audit({ orgId: user.orgId, userId: user.id, action: status === "opt_in" ? "consentimento.opt_in" : "consentimento.opt_out", entity: "cliente", entityId: id, details: note });
+    revalidatePath(`/clientes/${id}`);
+    return;
+  }
   await mutate((db) => {
     const client = db.clients.find((c) => c.id === id && c.orgId === user.orgId);
     if (!client) throw new Error("Cliente não encontrado.");
@@ -118,6 +141,10 @@ export async function anonymizeClientAction(formData: FormData) {
   const user = await authorize("clients:delete");
   const id = String(formData.get("id"));
   if (formData.get("confirm") !== "ANONIMIZAR") throw new Error("Digite ANONIMIZAR para confirmar.");
+  if (isSupabase()) {
+    // Exige apagar conversas, o que no banco só o servidor pode fazer: será uma função segura na próxima etapa.
+    throw new Error("A anonimização no Supabase será liberada na próxima etapa.");
+  }
   await mutate((db) => {
     const client = db.clients.find((c) => c.id === id && c.orgId === user.orgId);
     if (!client) throw new Error("Cliente não encontrado.");
@@ -143,6 +170,10 @@ export async function anonymizeClientAction(formData: FormData) {
   redirect("/clientes");
 }
 
+async function existingPhones(orgId: string) {
+  return (await scoped(orgId)).clients.map((c) => c.phone);
+}
+
 export type ImportState = { analysis?: ImportAnalysis; csv?: string; error?: string; imported?: number } | undefined;
 
 export async function analyzeImportAction(_: ImportState, formData: FormData): Promise<ImportState> {
@@ -151,8 +182,7 @@ export async function analyzeImportAction(_: ImportState, formData: FormData): P
   if (!(file instanceof File) || file.size === 0) return { error: "Selecione um arquivo CSV." };
   if (file.size > 2 * 1024 * 1024) return { error: "Arquivo muito grande (máx. 2 MB)." };
   const text = await file.text();
-  const db = await getDb();
-  const analysis = analyzeCsv(text, db.clients.filter((c) => c.orgId === user.orgId).map((c) => c.phone));
+  const analysis = analyzeCsv(text, await existingPhones(user.orgId));
   return { analysis, csv: text };
 }
 
@@ -162,8 +192,21 @@ export async function confirmImportAction(_: ImportState, formData: FormData): P
   if (!text || text.length > 2 * 1024 * 1024) return { error: "Dados de importação inválidos. Envie o arquivo novamente." };
   const consentConfirmed = formData.get("consentConfirmed") === "on";
   // Reanalisa no servidor: nunca confiar no resultado enviado pelo navegador.
-  const db = await getDb();
-  const analysis = analyzeCsv(text, db.clients.filter((c) => c.orgId === user.orgId).map((c) => c.phone));
+  const analysis = analyzeCsv(text, await existingPhones(user.orgId));
+  if (isSupabase()) {
+    const r = await sb.importClients(user, analysis.valid, consentConfirmed);
+    if (!r.ok) return { error: r.error };
+    await audit({
+      orgId: user.orgId,
+      userId: user.id,
+      action: "cliente.importacao",
+      entity: "cliente",
+      entityId: null,
+      details: `${r.data} importados; ${analysis.duplicatesInFile.length} duplicados no arquivo; ${analysis.alreadyExists.length} já existentes; ${analysis.invalid.length} inválidos.`,
+    });
+    revalidatePath("/clientes");
+    return { imported: r.data, analysis };
+  }
   const t = now();
   await mutate((d) => {
     for (const r of analysis.valid) {
