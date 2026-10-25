@@ -92,6 +92,18 @@ export function extractContent(raw: Obj | null | undefined): { text: string; med
   return null;
 }
 
+/** Tamanho declarado da mídia (bytes), para recusar arquivos grandes antes de baixar. */
+export function mediaSize(raw: Obj | null | undefined): number | null {
+  if (!raw) return null;
+  const m = unwrap(raw);
+  for (const key of Object.keys(MEDIA)) {
+    if (!isObj(m[key])) continue;
+    const n = Number(String((m[key] as Obj).fileLength ?? ""));
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }
+  return null;
+}
+
 export type IgnoreReason = "grupo_ou_lista" | "sem_numero" | "sem_conteudo" | "contato_fora_do_teste";
 
 /**

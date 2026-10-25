@@ -3,6 +3,7 @@
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { setSuggestionStatusDemo } from "@/lib/ai/knowledge";
 import { authorize, clientIp } from "@/lib/auth/session";
 import { applyWhatsAppEvents, audit, now, scoped } from "@/lib/data/repo";
 import { mutate } from "@/lib/data/store";
@@ -61,6 +62,8 @@ export async function sendMessageAction(_: SendState, formData: FormData): Promi
   if (aiAssisted && isSupabase()) {
     const client = await supabaseServer();
     await client.from("ai_suggestions").update({ status: "usada" }).eq("id", suggestionId);
+  } else if (aiAssisted) {
+    await setSuggestionStatusDemo(user.orgId, suggestionId, "usada");
   }
   if (!result.simulated) {
     await audit({ orgId: user.orgId, userId: user.id, action: "whatsapp.mensagem_enviada", entity: "conversa", entityId: convId, details: aiAssisted ? "texto revisado a partir de sugestão da IA" : "" });

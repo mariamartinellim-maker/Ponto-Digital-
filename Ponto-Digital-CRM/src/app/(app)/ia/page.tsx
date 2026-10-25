@@ -1,9 +1,9 @@
 import { ShieldCheck, Sparkles } from "lucide-react";
 import { Badge, Card, CardHeader, Notice, PageHeader } from "@/components/ui";
 import { requireUser } from "@/lib/auth/session";
-import { KNOWLEDGE_FIELDS, type Knowledge } from "@/lib/ai/prompt";
+import { loadKnowledge, usageThisMonth } from "@/lib/ai/knowledge";
+import { KNOWLEDGE_FIELDS } from "@/lib/ai/prompt";
 import { env } from "@/lib/env";
-import { isSupabase, supabaseServer } from "@/lib/supabase/server";
 import { KnowledgeForm } from "./knowledge-form";
 
 export const metadata = { title: "Assistente de IA" };
@@ -19,26 +19,7 @@ const LEVELS = [
 export default async function AiPage() {
   const user = await requireUser("ai:manage");
   const e = env();
-  let kb: (Knowledge & { enabled: boolean }) | null = null;
-  const usage = { count: 0, used: 0, input: 0, output: 0, cached: 0 };
-  if (isSupabase()) {
-    const sb = await supabaseServer();
-    const monthStart = new Date();
-    monthStart.setUTCDate(1);
-    monthStart.setUTCHours(3, 0, 0, 0); // meia-noite em Brasília
-    const [{ data: k }, { data: rows }] = await Promise.all([
-      sb.from("ai_knowledge").select("*").maybeSingle(),
-      sb.from("ai_suggestions").select("status,input_tokens,output_tokens,cache_read_tokens").gte("created_at", monthStart.toISOString()).limit(10000),
-    ]);
-    if (k) kb = { enabled: k.enabled === true, ...(Object.fromEntries(KNOWLEDGE_FIELDS.map((f) => [f.key, String(k[f.key] ?? "")])) as unknown as Knowledge) };
-    for (const r of rows ?? []) {
-      usage.count++;
-      if (r.status === "usada") usage.used++;
-      usage.input += Number(r.input_tokens) || 0;
-      usage.output += Number(r.output_tokens) || 0;
-      usage.cached += Number(r.cache_read_tokens) || 0;
-    }
-  }
+  const [kb, usage] = await Promise.all([loadKnowledge(user.orgId), usageThisMonth(user.orgId)]);
 
   return (
     <>
@@ -47,8 +28,7 @@ export default async function AiPage() {
         description="Ensine à IA os serviços, preços, portfólio e o jeito de atender da Ponto Digital. Ela sugere respostas no Atendimento; uma pessoa sempre revisa antes de enviar."
         actions={<Badge tone={kb?.enabled ? "green" : "slate"}>{kb?.enabled ? "IA ativa" : "IA desativada"}</Badge>}
       />
-      {!isSupabase() && <div className="mb-6"><Notice tone="amber">O assistente de IA funciona com o Supabase conectado.</Notice></div>}
-      {isSupabase() && !e.ANTHROPIC_API_KEY && (
+      {!e.ANTHROPIC_API_KEY && (
         <div className="mb-6">
           <Notice tone="amber" title="IA ainda não conectada no servidor">
             Falta a chave da Anthropic (ANTHROPIC_API_KEY) nas variáveis do Render. Você já pode preencher a base de conhecimento abaixo.
@@ -57,7 +37,7 @@ export default async function AiPage() {
       )}
 
       <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[1fr_340px]">
-        <KnowledgeForm initial={kb} fields={KNOWLEDGE_FIELDS} canTest={isSupabase() && Boolean(e.ANTHROPIC_API_KEY)} />
+        <KnowledgeForm initial={kb} fields={KNOWLEDGE_FIELDS} canTest={Boolean(e.ANTHROPIC_API_KEY)} />
 
         <div className="space-y-6">
           <Card>

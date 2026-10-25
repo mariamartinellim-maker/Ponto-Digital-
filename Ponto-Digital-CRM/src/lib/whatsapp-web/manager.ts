@@ -7,7 +7,8 @@ import { isSupabase } from "../supabase/server";
 import type { WaEvent } from "../whatsapp/events";
 import { toDbEvent } from "../whatsapp/ingest";
 import { loadAuthState, sessionKey, sessionStore, savedSessionOrg, type LoadedAuth } from "./auth-state";
-import { MAX_RECONNECTS, inList, linkedPhone, parseNumbers, reconnectDelay, toWaEvent, type WebMessage } from "./rules";
+import { saveAsset } from "../media/storage";
+import { MAX_RECONNECTS, inList, linkedPhone, mediaSize, parseNumbers, reconnectDelay, toWaEvent, type WebMessage } from "./rules";
 
 /**
  * Conexão EXPERIMENTAL pelo WhatsApp Web (QR Code), não oficial.
@@ -45,6 +46,8 @@ export interface WebSocketLike {
   user?: { id?: string; phoneNumber?: string };
   end(error?: Error): void;
   logout(): Promise<void>;
+  /** Baixa o arquivo de uma mensagem com mídia (descriptografado pelo próprio WhatsApp Web). */
+  downloadMedia?(msg: WebMessage): Promise<Uint8Array>;
 }
 
 interface Runtime {
@@ -106,9 +109,9 @@ async function createSocket(auth: LoadedAuth, simulator: boolean): Promise<WebSo
     const { SimulatedSocket } = await import("./simulator");
     return new SimulatedSocket(auth.state.creds);
   }
-  const { default: makeWASocket, Browsers, makeCacheableSignalKeyStore } = await import("baileys");
+  const { default: makeWASocket, Browsers, makeCacheableSignalKeyStore, downloadMediaMessage } = await import("baileys");
   const logger = silentLogger();
-  return makeWASocket({
+  const sock = makeWASocket({
     auth: { creds: auth.state.creds, keys: makeCacheableSignalKeyStore(auth.state.keys, logger) },
     browser: Browsers.ubuntu("Ponto Digital CRM (teste)"),
     logger,
@@ -117,7 +120,12 @@ async function createSocket(auth: LoadedAuth, simulator: boolean): Promise<WebSo
     shouldSyncHistoryMessage: () => false,
     generateHighQualityLinkPreview: false,
     getMessage: async () => undefined,
-  }) as unknown as WebSocketLike;
+  });
+  const wrapped = sock as unknown as WebSocketLike;
+  wrapped.downloadMedia = async (msg) =>
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- formato interno do Baileys (WAMessage)
+    downloadMediaMessage(msg as any, "buffer", {}, { logger, reuploadRequest: sock.updateMediaMessage });
+  return wrapped;
 }
 
 function silentLogger() {
@@ -220,6 +228,7 @@ async function connect(orgId: string) {
     }
     if (ignored) set({ ignored: rt().state.ignored + ignored });
     if (!events.length) return;
+    await saveIncomingMedia(orgId, sock, u.messages ?? [], events);
     try {
       await ingest(orgId, events);
       set({ received: rt().state.received + events.length });
@@ -228,6 +237,37 @@ async function connect(orgId: string) {
       set({ lastError: "Falha ao gravar mensagens recebidas. Veja os registros do servidor." });
     }
   });
+}
+
+const MAX_MEDIA = 50 * 1024 * 1024;
+const EXT: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "audio/ogg": "ogg", "audio/mpeg": "mp3", "audio/mp4": "m4a", "video/mp4": "mp4", "application/pdf": "pdf" };
+
+/**
+ * Mídias recebidas (imagem, áudio, vídeo, PDF) vão para a biblioteca do CRM, ligadas à mensagem.
+ * Figurinhas e arquivos acima de 50 MB ficam só como texto. Uma falha no download não impede gravar a mensagem.
+ */
+async function saveIncomingMedia(orgId: string, sock: WebSocketLike, msgs: WebMessage[], events: WaEvent[]) {
+  if (!sock.downloadMedia) return;
+  for (const ev of events) {
+    if ((ev.kind !== "inbound" && ev.kind !== "echo") || !ev.media || ev.media.type === "sticker") continue;
+    const msg = msgs.find((m) => `waweb.${m.key.id}`.slice(0, 120) === ev.waMessageId);
+    if (!msg) continue;
+    const declared = mediaSize(msg.message);
+    if (declared && declared > MAX_MEDIA) continue;
+    try {
+      const bytes = await sock.downloadMedia(msg);
+      const mime = (ev.media.mime ?? "").split(";")[0]!.trim().toLowerCase();
+      const filename = ev.media.filename || `whatsapp-${String(msg.key.id).slice(0, 16)}.${EXT[mime] ?? "bin"}`;
+      const asset = await saveAsset(
+        { orgId, bytes, mime: ev.media.mime ?? "", filename, title: ev.media.caption || filename, tags: ["whatsapp"], source: "whatsapp_web", clientId: null, createdBy: null },
+        { admin: true },
+      );
+      if ("error" in asset) console.warn("[whatsapp-web] mídia não guardada:", asset.error);
+      else ev.media.assetId = asset.id;
+    } catch (err) {
+      console.warn("[whatsapp-web] falha ao baixar mídia:", (err as Error).message);
+    }
+  }
 }
 
 async function dropAuth(auth: LoadedAuth) {

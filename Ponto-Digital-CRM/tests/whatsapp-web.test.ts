@@ -1,4 +1,5 @@
 import { readFileSync, readdirSync } from "node:fs";
+import { rm } from "node:fs/promises";
 import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { getDb } from "@/lib/data/store";
@@ -143,6 +144,23 @@ describe("conexão com o simulador (modo demonstração)", () => {
     const client = db.clients.find((c) => c.phone === CONTATO)!;
     expect(client.name).toBe("Contato Teste");
     expect(db.clients.some((c) => c.phone === "5511900001111")).toBe(false);
+  });
+
+  it("guarda imagens e áudios recebidos na biblioteca, ligados à mensagem", async () => {
+    const db = await getDb();
+    const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+    const received = wawebState().received;
+    currentSimulator()!.message({ from: CONTATO, text: "Segue o comprovante", media: { type: "image", mime: "image/jpeg", base64: png } });
+    currentSimulator()!.message({ from: CONTATO, text: "", media: { type: "image", mime: "image/png", base64: Buffer.from("<html>").toString("base64") } });
+    await waitFor(() => wawebState().received === received + 2);
+    const msg = db.messages.find((m) => m.body === "[imagem] Segue o comprovante")!;
+    expect(msg.media).toMatchObject({ type: "image", caption: "Segue o comprovante" });
+    const asset = db.mediaAssets.find((a) => a.id === msg.media!.assetId)!;
+    expect(asset).toMatchObject({ source: "whatsapp_web", type: "image", tags: ["whatsapp"] });
+    // Conteúdo que não é imagem de verdade: a mensagem fica, o arquivo não entra na biblioteca.
+    const fake = db.messages.filter((m) => m.waMessageId?.startsWith("waweb.") && m.body === "[imagem]").at(-1)!;
+    expect(fake.media?.assetId).toBeUndefined();
+    await rm(path.join(process.cwd(), ".data", "arquivos", asset.orgId), { recursive: true, force: true });
   });
 
   it("pausa e retoma sem novo QR Code; reconecta após queda de rede", async () => {

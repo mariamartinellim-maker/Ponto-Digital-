@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { authorize, clientIp } from "@/lib/auth/session";
+import { saveKnowledgeDemo } from "@/lib/ai/knowledge";
 import { KNOWLEDGE_FIELDS, type Knowledge } from "@/lib/ai/prompt";
 import { suggestReply } from "@/lib/ai/suggest";
 import { audit } from "@/lib/data/repo";
@@ -22,11 +23,16 @@ function readKnowledge(formData: FormData): Knowledge | string {
 
 export async function saveKnowledgeAction(_: KbState, formData: FormData): Promise<KbState> {
   const user = await authorize("ai:manage");
-  if (!isSupabase()) return { error: "A base de conhecimento fica no Supabase. Conecte o Supabase para usar a IA." };
   const kb = readKnowledge(formData);
   if (typeof kb === "string") return { error: kb };
   const enabled = formData.get("enabled") === "on";
   if (enabled && !kb.services) return { error: "Preencha ao menos “Serviços” antes de ativar a IA." };
+  if (!isSupabase()) {
+    await saveKnowledgeDemo(user.orgId, user.id, enabled, kb);
+    await audit({ orgId: user.orgId, userId: user.id, action: enabled ? "ia.base_atualizada" : "ia.base_atualizada_desativada", entity: "ia", entityId: null, ip: await clientIp() });
+    revalidatePath("/ia");
+    return { ok: Date.now() };
+  }
   const sb = await supabaseServer();
   const { data: current } = await sb.from("ai_knowledge").select("org_id").maybeSingle();
   const { error } = current
@@ -43,7 +49,6 @@ export type TestState = { error?: string; reply?: string; needsHuman?: boolean; 
 /** Testa a IA com uma pergunta de exemplo, usando o texto atual do formulário (nada é enviado a clientes). */
 export async function testKnowledgeAction(_: TestState, formData: FormData): Promise<TestState> {
   const user = await authorize("ai:manage");
-  if (!isSupabase()) return { error: "Disponível com o Supabase conectado." };
   if (!rateLimit(`ia-teste:${user.id}`, 5, 60_000).ok) return { error: "Aguarde um minuto entre os testes." };
   const question = String(formData.get("question") ?? "").trim().slice(0, 1000);
   if (question.length < 3) return { error: "Escreva uma pergunta de cliente para testar." };
