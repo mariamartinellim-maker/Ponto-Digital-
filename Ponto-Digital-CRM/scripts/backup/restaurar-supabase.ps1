@@ -1,4 +1,4 @@
-<#
+﻿<#
   RESTAURA um backup gerado por backup-supabase.ps1 num projeto Supabase NOVO e VAZIO.
   Recusa continuar se o banco de destino já tiver as tabelas do CRM (não sobrescreve dados).
   Para apenas desfazer a migração operacional, use supabase/scripts/reverter-operacao.sql.

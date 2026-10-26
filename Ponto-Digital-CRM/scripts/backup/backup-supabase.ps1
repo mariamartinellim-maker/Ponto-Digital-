@@ -1,4 +1,4 @@
-<#
+﻿<#
   Backup manual GRATUITO do banco Supabase (plano free, sem backups automáticos).
   Gera, numa pasta com data e hora:
     completo.dump          cópia integral em formato do PostgreSQL (arquivo de segurança)
