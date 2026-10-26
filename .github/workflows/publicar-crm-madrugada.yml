@@ -1,0 +1,190 @@
+# Publica o Ponto Digital CRM no Render SOMENTE de madrugada (03:00 em Cuiabá), pela nuvem do GitHub.
+# Nada roda no computador do escritório. Passo a passo e regras: Ponto-Digital-CRM/docs/ATUALIZACOES_MADRUGADA.md
+#
+# Fluxo: há commit novo desde a última publicação? → testa (lint, tipos, testes, build) → confere a saúde
+# do CRM → manda o Render publicar (deploy hook) → espera ficar no ar → confere a saúde de novo → marca
+# o commit publicado na tag "crm-publicado". Se qualquer etapa falhar, NÃO publica e o GitHub avisa por e-mail.
+#
+# Configuração no GitHub (Settings → Secrets and variables → Actions):
+#   segredo  RENDER_DEPLOY_HOOK_URL  (obrigatório) Render → serviço → Settings → Deploy Hook
+#   segredo  RENDER_API_KEY          (opcional) acompanha a publicação pelo status real do Render
+#   variável CRM_BRANCH              (opcional) branch publicada; padrão abaixo
+#   variável CRM_URL                 (opcional) endereço do CRM; padrão abaixo
+name: Publicar CRM de madrugada
+
+on:
+  schedule:
+    - cron: "0 7 * * *" # 07:00 UTC = 03:00 em Cuiabá (UTC-4, sem horário de verão)
+  workflow_dispatch:
+    inputs:
+      forcar_fora_do_horario:
+        description: "Publicar AGORA, mesmo fora da madrugada (só emergência)"
+        type: boolean
+        default: false
+      publicar_sem_mudancas:
+        description: "Publicar mesmo sem commit novo"
+        type: boolean
+        default: false
+
+concurrency:
+  group: publicar-crm
+  cancel-in-progress: false
+
+permissions:
+  contents: write # só para atualizar a tag crm-publicado
+
+env:
+  CRM_BRANCH: ${{ vars.CRM_BRANCH || 'claude/project-thread-iwgiqh' }}
+  CRM_URL: ${{ vars.CRM_URL || 'https://ponto-digital-crm.onrender.com' }}
+  TZ: America/Cuiaba
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Conferir janela da madrugada (00h–05h59 em Cuiabá)
+        id: janela
+        env:
+          FORCAR: ${{ github.event.inputs.forcar_fora_do_horario == 'true' }}
+        run: |
+          hora=$(date +%H)
+          echo "Agora em Cuiabá: $(date '+%d/%m/%Y %H:%M')"
+          if [ "$FORCAR" = "true" ]; then
+            echo "::warning::Publicação forçada fora da madrugada."
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          elif [ "$((10#$hora))" -lt 6 ]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::Fora da madrugada: nada será publicado (a próxima tentativa é às 03:00)."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Baixar a branch publicada
+        if: steps.janela.outputs.ok == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CRM_BRANCH }}
+          fetch-depth: 0
+
+      - name: Ver se há mudança desde a última publicação
+        if: steps.janela.outputs.ok == 'true'
+        id: mudou
+        env:
+          SEM_MUDANCAS: ${{ github.event.inputs.publicar_sem_mudancas == 'true' }}
+        run: |
+          git fetch --force origin "refs/tags/crm-publicado:refs/tags/crm-publicado" 2>/dev/null || true
+          atual=$(git rev-parse HEAD)
+          ultimo=$(git rev-parse -q --verify "refs/tags/crm-publicado^{commit}" || echo "nenhum")
+          echo "Commit atual: $atual | último publicado por esta rotina: $ultimo"
+          if [ "$atual" = "$ultimo" ] && [ "$SEM_MUDANCAS" != "true" ]; then
+            echo "::notice::Nenhuma mudança nova. Nada a publicar."
+            echo "publicar=false" >> "$GITHUB_OUTPUT"
+          else
+            git log --oneline "${ultimo}..HEAD" 2>/dev/null | head -30 || git log --oneline -5
+            echo "publicar=true" >> "$GITHUB_OUTPUT"
+          fi
+          echo "sha=$atual" >> "$GITHUB_OUTPUT"
+
+      - name: Conferir o deploy hook
+        if: steps.mudou.outputs.publicar == 'true'
+        env:
+          HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "$HOOK" ]; then
+            echo "::error::Falta o segredo RENDER_DEPLOY_HOOK_URL (veja docs/ATUALIZACOES_MADRUGADA.md)."
+            exit 1
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.mudou.outputs.publicar == 'true'
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: Ponto-Digital-CRM/package-lock.json
+
+      - name: Testar antes de publicar (lint, tipos, testes, build)
+        if: steps.mudou.outputs.publicar == 'true'
+        working-directory: Ponto-Digital-CRM
+        env:
+          DATA_BACKEND: demo # o teste não toca no banco real
+        run: |
+          export SESSION_SECRET=$(openssl rand -hex 32)
+          npm ci --include=dev --no-audit --no-fund
+          npm run lint
+          npm run typecheck
+          npm test
+          npm run build
+
+      - name: Saúde do CRM antes (também acorda o plano gratuito)
+        if: steps.mudou.outputs.publicar == 'true'
+        run: |
+          for i in 1 2 3 4; do
+            code=$(curl -s -o antes.json -w '%{http_code}' --max-time 90 "$CRM_URL/api/health" || true)
+            [ "$code" = "200" ] && break
+            sleep 20
+          done
+          echo "HTTP $code"; cat antes.json 2>/dev/null; echo
+          [ "$code" = "200" ] || echo "::warning::O CRM não estava saudável antes da publicação (HTTP $code)."
+
+      - name: Mandar o Render publicar
+        if: steps.mudou.outputs.publicar == 'true'
+        id: deploy
+        env:
+          HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          resp=$(curl -fsS -X POST --max-time 60 "$HOOK")
+          id=$(echo "$resp" | jq -r '.deploy.id // empty')
+          servico=$(echo "$HOOK" | grep -oE 'srv-[a-z0-9]+' | head -1)
+          echo "Publicação iniciada: ${id:-(sem id)}"
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+          echo "servico=$servico" >> "$GITHUB_OUTPUT"
+
+      - name: Esperar a publicação terminar
+        if: steps.mudou.outputs.publicar == 'true'
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          ID: ${{ steps.deploy.outputs.id }}
+          SERVICO: ${{ steps.deploy.outputs.servico }}
+        run: |
+          if [ -n "$RENDER_API_KEY" ] && [ -n "$ID" ] && [ -n "$SERVICO" ]; then
+            for i in $(seq 1 60); do
+              status=$(curl -fsS --max-time 30 -H "Authorization: Bearer $RENDER_API_KEY" \
+                "https://api.render.com/v1/services/$SERVICO/deploys/$ID" | jq -r '.status // .deploy.status // "?"' || echo "?")
+              echo "$(date +%H:%M) status: $status"
+              case "$status" in
+                live) exit 0 ;;
+                build_failed|update_failed|canceled|pre_deploy_failed|deactivated)
+                  echo "::error::O Render não publicou ($status). A versão anterior continua no ar."; exit 1 ;;
+              esac
+              sleep 30
+            done
+            echo "::error::A publicação passou de 30 minutos."; exit 1
+          else
+            echo "Sem RENDER_API_KEY: aguardando 10 minutos para o Render compilar e trocar a versão."
+            sleep 600
+          fi
+
+      - name: Saúde do CRM depois
+        if: steps.mudou.outputs.publicar == 'true'
+        run: |
+          for i in $(seq 1 10); do
+            code=$(curl -s -o depois.json -w '%{http_code}' --max-time 90 "$CRM_URL/api/health" || true)
+            [ "$code" = "200" ] && break
+            sleep 30
+          done
+          echo "HTTP $code"; cat depois.json 2>/dev/null; echo
+          if [ "$code" != "200" ]; then
+            echo "::error::O CRM não respondeu bem depois da publicação (HTTP $code). Veja docs/ATUALIZACOES_MADRUGADA.md → 'Se algo der errado'."
+            exit 1
+          fi
+          # Webhook do WhatsApp no ar: sem o token correto a Meta recebe 403, que é o esperado.
+          wh=$(curl -s -o /dev/null -w '%{http_code}' --max-time 60 "$CRM_URL/api/webhooks/whatsapp" || true)
+          echo "Webhook do WhatsApp: HTTP $wh (esperado 403)"
+          [ "$wh" = "403" ] || { echo "::error::O endereço do webhook do WhatsApp não respondeu como esperado."; exit 1; }
+
+      - name: Marcar o commit publicado
+        if: steps.mudou.outputs.publicar == 'true'
+        run: |
+          git tag -f crm-publicado "${{ steps.mudou.outputs.sha }}"
+          git push -f origin refs/tags/crm-publicado

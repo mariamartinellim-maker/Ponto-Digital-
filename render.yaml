@@ -15,7 +15,7 @@ services:
     buildCommand: npm ci --include=dev && npm run build
     startCommand: npm start
     healthCheckPath: /login
-    autoDeployTrigger: commit
+    autoDeployTrigger: off # publica só de madrugada pela rotina do GitHub (.github/workflows/publicar-crm-madrugada.yml)
     envVars:
       - key: NODE_VERSION
         value: "22"
