@@ -12,7 +12,7 @@ services:
     # Para atender clientes de verdade (webhooks da Meta a qualquer hora), troque por 0.5c-512mb (Starter, US$ 7/mês).
     plan: free
     region: virginia # região dos EUA mais próxima do Brasil
-    branch: main
+    branch: claude/project-thread-iwgiqh # fase de testes; volte para main quando o teste integrado for aprovado
     rootDir: Ponto-Digital-CRM
     buildCommand: npm ci --include=dev && npm run build
     startCommand: npm start
