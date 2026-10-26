@@ -45,7 +45,7 @@ services:
       - key: WAWEB_HABILITADO
         value: "true"
       - key: WAWEB_SESSION_KEY
-        generateValue: true # 32 bytes aleatórios em base64, gerados pelo Render
+        sync: false # 32 bytes em base64: gere com npm run whatsapp:chave (o gerador do Render não tem esse formato)
       - key: WAWEB_NUMEROS_PERMITIDOS
         sync: false
       - key: WAWEB_CONTATOS_TESTE
