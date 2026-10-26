@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE, verifySession } from "./lib/auth/token";
 
-const PUBLIC = ["/login", "/esqueci-senha", "/redefinir-senha", "/offline", "/auth/callback"];
+const PUBLIC = ["/login", "/esqueci-senha", "/redefinir-senha", "/offline", "/auth/callback", "/privacidade"];
 
 function toLogin(req: NextRequest) {
   const { pathname, search } = req.nextUrl;
