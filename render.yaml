@@ -8,7 +8,9 @@ services:
   - type: web
     name: ponto-digital-crm
     runtime: node
-    plan: 0.5c-512mb # Starter (0,5 CPU, 512 MB), US$ 7/mês: sempre ligado (necessário para os webhooks do WhatsApp)
+    # Gratuito (512 MB) para a fase de testes: dorme após 15 min sem acesso e acorda no próximo acesso.
+    # Para atender clientes de verdade (webhooks da Meta a qualquer hora), troque por 0.5c-512mb (Starter, US$ 7/mês).
+    plan: free
     region: virginia # região dos EUA mais próxima do Brasil
     branch: main
     rootDir: Ponto-Digital-CRM
@@ -34,4 +36,17 @@ services:
       - key: SUPABASE_PUBLISHABLE_KEY
         sync: false
       - key: APP_URL
+        sync: false
+      - key: SUPABASE_SECRET_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      # WhatsApp Web experimental (docs/WHATSAPP_WEB_EXPERIMENTAL.md): só chips e contatos de teste.
+      - key: WAWEB_HABILITADO
+        value: "true"
+      - key: WAWEB_SESSION_KEY
+        generateValue: true # 32 bytes aleatórios em base64, gerados pelo Render
+      - key: WAWEB_NUMEROS_PERMITIDOS
+        sync: false
+      - key: WAWEB_CONTATOS_TESTE
         sync: false
