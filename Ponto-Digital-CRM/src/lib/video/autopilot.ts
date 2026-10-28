@@ -76,8 +76,13 @@ export function scriptText(d: OrderDraft) {
   return [`Olha o roteiro do seu vídeo:`, "", `*Fala:* "${d.speech}"`, `*Nome no final:* ${d.driverName}`, ...(d.contactPhone ? [`*WhatsApp:* ${formatBrPhone(d.contactPhone)}`] : [])].join("\n");
 }
 
-export function paymentText(s: Pick<VideoAutopilotSettings, "priceText" | "pixKey">) {
-  return `Pra liberar o vídeo sem a marca d'água fica ${s.priceText.trim()}, chave Pix ${s.pixKey.trim()}. Me manda o comprovante aqui que já te envio`;
+/** Pagamento em 3 mensagens: a chave Pix vai sozinha, para o cliente copiar com um toque (como a equipe faz). */
+export function paymentMessages(s: Pick<VideoAutopilotSettings, "priceText" | "pixKey">) {
+  return [`Pra liberar o vídeo sem a marca d'água fica ${s.priceText.trim()}. Segue a chave Pix:`, s.pixKey.trim(), "Me manda o comprovante aqui que já te envio"];
+}
+
+async function sayAll(t: Target, orgId: string, bodies: string[]) {
+  for (const body of bodies) await say(t, orgId, { kind: "text", body });
 }
 
 // ---------------------------------------------------------------------------
@@ -401,12 +406,14 @@ async function orderStep(st: VideoAutopilotState, s: VideoAutopilotSettings, t: 
     return;
   }
   if (r.intent === "aprovado" && s.priceText && s.pixKey) {
-    await say(t, st.orgId, { kind: "text", body: paymentText(s) });
+    await sayAll(t, st.orgId, paymentMessages(s));
     return;
   }
   if (st.retries >= 2) return handoff(st, t, `Resposta não entendida na etapa ${about}.`);
   await patchState(st, { retries: st.retries + 1 });
-  await say(t, st.orgId, { kind: "text", body: about === "avatar" ? TEXTS.approveHint : s.priceText && s.pixKey ? paymentText(s) : TEXTS.handoff });
+  if (about === "avatar") await say(t, st.orgId, { kind: "text", body: TEXTS.approveHint });
+  else if (s.priceText && s.pixKey) await sayAll(t, st.orgId, paymentMessages(s));
+  else await say(t, st.orgId, { kind: "text", body: TEXTS.handoff });
 }
 
 /** Comprovante: basta a IA reconhecer que a imagem é um comprovante de pagamento (risco aceito pelo dono). */
@@ -452,7 +459,7 @@ export async function onVideoReady(o: VideoOrder) {
   if (!r.ok) return patchState(st, { stage: "humano", note: `Vídeo pronto, mas não enviado: ${r.error}`.slice(0, 300) });
   const s = await getSettings(o.orgId);
   if (s?.priceText && s.pixKey) {
-    await sendToConversation(o.orgId, st.conversationId, { kind: "text", body: paymentText(s) }, null);
+    for (const body of paymentMessages(s)) await sendToConversation(o.orgId, st.conversationId, { kind: "text", body }, null);
   } else {
     await patchState(st, { stage: "humano", note: "Prévia enviada. Falta configurar valor e chave Pix no robô: a equipe precisa passar o pagamento." });
   }

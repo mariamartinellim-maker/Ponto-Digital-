@@ -127,10 +127,11 @@ describe("atendimento automático completo (base em memória, simulador)", () =>
     await send(inbound("pode continuar"));
     expect((await outTexts()).at(-1)).toBe(TEXTS.animating);
     await waitOrder("aguardando_pagamento");
-    for (let i = 0; i < 40 && !(await outTexts()).at(-1)?.includes("Pix"); i++) await new Promise((r) => setTimeout(r, 100));
+    for (let i = 0; i < 40 && !(await outTexts()).at(-1)?.includes("comprovante"); i++) await new Promise((r) => setTimeout(r, 100));
     texts = await outTexts();
-    expect(texts.at(-2)).toMatch(/^\[vídeo\] Prontinho, essa é a prévia/);
-    expect(texts.at(-1)).toBe("Pra liberar o vídeo sem a marca d'água fica R$ 50, chave Pix pix@pontodigital.com. Me manda o comprovante aqui que já te envio");
+    expect(texts.at(-4)).toMatch(/^\[vídeo\] Prontinho, essa é a prévia/);
+    // A chave Pix vai sozinha numa mensagem, para copiar com um toque.
+    expect(texts.slice(-3)).toEqual(["Pra liberar o vídeo sem a marca d'água fica R$ 50. Segue a chave Pix:", "pix@pontodigital.com", "Me manda o comprovante aqui que já te envio"]);
 
     ai.key = "chave-de-teste";
     await send(inbound("[imagem]", { type: "image", id: "outra", mime: "image/jpeg" })); // foto qualquer não libera
