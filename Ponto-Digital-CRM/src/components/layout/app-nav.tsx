@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import {
   CalendarCheck,
+  Clapperboard,
   Factory,
   LayoutDashboard,
   Library,
@@ -42,6 +43,7 @@ const NAV: { href: string; label: string; icon: typeof Users; perm?: Permission;
   { href: "/vendas", label: "Vendas", icon: ShoppingBag, perm: "sales:manage" },
   { href: "/financeiro", label: "Financeiro", icon: Wallet, perm: "finance:manage" },
   { href: "/producao", label: "Produção", icon: Factory, perm: "production:manage" },
+  { href: "/videos", label: "Vídeos com avatar", icon: Clapperboard, perm: "videos:manage" },
   { href: "/ia", label: "Assistente de IA", icon: Sparkles, perm: "ai:manage" },
 ];
 const ADMIN: typeof NAV = [

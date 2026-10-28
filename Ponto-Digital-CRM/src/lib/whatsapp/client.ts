@@ -13,7 +13,8 @@ export type SendResult =
 type SendPayload =
   | { type: "text"; to: string; body: string }
   | { type: "template"; to: string; name: string; language: string; variables: string[] }
-  | { type: "media"; to: string; media: OutgoingMediaType; mediaId: string; caption?: string; filename?: string };
+  | { type: "media"; to: string; media: OutgoingMediaType; mediaId: string; caption?: string; filename?: string }
+  | { type: "pix"; to: string; body: string; referenceId: string; itemName: string; amountCents: number; code: string; merchantName: string; key: string; keyType: string };
 
 export interface WaCredentials {
   token: string;
@@ -86,6 +87,35 @@ export async function sendWhatsApp(payload: SendPayload, opts: { campaign?: bool
         components: payload.variables.length
           ? [{ type: "body", parameters: payload.variables.map((text) => ({ type: "text", text })) }]
           : [],
+      },
+    });
+  } else if (payload.type === "pix") {
+    // Cobrança Pix (Payments API Brasil): cartão com titular, valor e botão de copiar o código Pix.
+    const money = (value: number) => ({ value, offset: 100 });
+    Object.assign(body, {
+      type: "interactive",
+      interactive: {
+        type: "order_details",
+        body: { text: payload.body },
+        action: {
+          name: "review_and_pay",
+          parameters: {
+            reference_id: payload.referenceId,
+            type: "digital-goods",
+            payment_type: "br",
+            payment_settings: [
+              { type: "pix_dynamic_code", pix_dynamic_code: { code: payload.code, merchant_name: payload.merchantName, key: payload.key, key_type: payload.keyType } },
+            ],
+            currency: "BRL",
+            total_amount: money(payload.amountCents),
+            order: {
+              status: "pending",
+              tax: { value: 0, offset: 100, description: "Sem impostos" },
+              items: [{ retailer_id: "video", name: payload.itemName, amount: money(payload.amountCents), quantity: 1 }],
+              subtotal: money(payload.amountCents),
+            },
+          },
+        },
       },
     });
   } else {

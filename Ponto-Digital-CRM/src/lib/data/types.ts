@@ -387,6 +387,110 @@ export interface AiSuggestionRecord {
   createdAt: string;
 }
 
+/**
+ * Pedido de vídeo com avatar (todos os segmentos de motorista): foto do cliente → avatar → vídeo → prévia com marca d'água →
+ * comprovante → vídeo limpo. Cada etapa paga (avatar e vídeo) só roda com a automação ligada e dentro do limite do mês.
+ */
+export type VideoOrderStatus =
+  | "foto_recebida"
+  | "gerando_avatar"
+  | "avatar_pronto"
+  | "avatar_enviado"
+  | "gerando_video"
+  | "video_pronto"
+  | "aguardando_pagamento"
+  | "pago"
+  | "entregue"
+  | "falhou"
+  | "cancelado";
+/** Segmento do motorista: o vídeo (cena, logo final e fala) se adapta a cada um. */
+export type VideoModality = "uber" | "taxi" | "mototaxi" | "motoboy" | "executivo" | "van" | "frete" | "particular";
+export interface VideoOrder {
+  id: string;
+  orgId: string;
+  number: number;
+  clientId: string;
+  conversationId: string | null;
+  modality: VideoModality;
+  /** Nome da "empresa" no vídeo: nome e modalidade do motorista (ex.: "Benner Táxi", "Motorista RJ"). */
+  driverName: string;
+  /** Define "o motorista"/"a motorista" no prompt e a voz do vídeo. */
+  driverGender: "masculino" | "feminino";
+  /** Cidade do cliente: paisagem nas janelas. */
+  city: string;
+  /** Fala do avatar no vídeo. */
+  speech: string;
+  /** WhatsApp que aparece no vídeo para os passageiros chamarem o motorista. */
+  contactPhone: string;
+  /** Ajustes pedidos pelo cliente (refazer avatar ou vídeo). */
+  adjustments: string;
+  status: VideoOrderStatus;
+  photoAssetId: string;
+  avatarAssetId: string | null;
+  videoAssetId: string | null;
+  previewAssetId: string | null;
+  receiptAssetId: string | null;
+  /** Quantas vezes cada etapa paga rodou (controle de gasto). */
+  avatarRuns: number;
+  videoRuns: number;
+  /** "simulador" = sem chave (teste gratuito, sem IA); "ia" = OpenAI + Veo. */
+  engine: "simulador" | "ia";
+  /** Conduzido pelo atendimento automático: avatar e prévia são enviados sozinhos ao ficarem prontos. */
+  autopilot: boolean;
+  error: string | null;
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+  avatarSentAt: string | null;
+  previewSentAt: string | null;
+  paidAt: string | null;
+  deliveredAt: string | null;
+}
+
+/** Atendimento automático dos vídeos: configuração da organização. */
+export interface VideoAutopilotSettings {
+  id: string;
+  orgId: string;
+  enabled: boolean;
+  /** "anuncio": só contato novo vindo de anúncio; "contato_novo": qualquer contato novo. */
+  trigger: "anuncio" | "contato_novo";
+  /** Responde só aos números de teste (WHATSAPP_NUMEROS_TESTE). */
+  testOnly: boolean;
+  priceText: string;
+  pixKey: string;
+  /** Titular e cidade da chave (cartão de cobrança Pix). */
+  pixHolder: string;
+  pixCity: string;
+  /** Áudio gravado de boas-vindas, perguntando o segmento do motorista. */
+  audioAskAssetId: string | null;
+  /** Áudio gravado: "Vamos precisar apenas de uma foto sua e das informações do seu atendimento." */
+  audioPhotoAssetId: string | null;
+  updatedBy: string | null;
+  updatedAt: string;
+}
+
+export type AutopilotStage = "perguntou_modalidade" | "pediu_foto" | "roteiro" | "avatar" | "video" | "finalizado" | "humano";
+/** Andamento do atendimento automático numa conversa. */
+export interface VideoAutopilotState {
+  id: string;
+  orgId: string;
+  conversationId: string;
+  clientId: string;
+  stage: AutopilotStage;
+  modality: VideoModality | null;
+  /** Informações do atendimento que o cliente escreveu (base da fala e do nome no vídeo). */
+  info: string;
+  photoAssetId: string | null;
+  /** Roteiro enviado ao cliente para aprovar antes do avatar. */
+  draft: { driverName: string; driverGender: "masculino" | "feminino"; city: string; speech: string; contactPhone: string } | null;
+  orderId: string | null;
+  /** Respostas que o robô não entendeu: na terceira, passa para uma pessoa. */
+  retries: number;
+  note: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Database {
   version: number;
   organizations: Organization[];
@@ -413,7 +517,10 @@ export interface Database {
   guardianEvents: GuardianEvent[];
   aiKnowledge: AiKnowledgeRecord[];
   aiSuggestions: AiSuggestionRecord[];
+  videoOrders: VideoOrder[];
+  videoAutopilotSettings: VideoAutopilotSettings[];
+  videoAutopilotStates: VideoAutopilotState[];
 }
 
 /** Coleções acrescentadas depois da versão 1 da base demo (criadas vazias em bases antigas). */
-export const LATER_COLLECTIONS = ["mediaAssets", "receipts", "sales", "financeEntries", "productionOrders", "guardianEvents", "aiKnowledge", "aiSuggestions"] as const;
+export const LATER_COLLECTIONS = ["mediaAssets", "receipts", "sales", "financeEntries", "productionOrders", "guardianEvents", "aiKnowledge", "aiSuggestions", "videoOrders", "videoAutopilotSettings", "videoAutopilotStates"] as const;

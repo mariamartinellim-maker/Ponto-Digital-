@@ -402,5 +402,8 @@ export async function buildSeed(): Promise<Database> {
     guardianEvents: [],
     aiKnowledge: [],
     aiSuggestions: [],
+    videoOrders: [],
+    videoAutopilotSettings: [],
+    videoAutopilotStates: [],
   };
 }

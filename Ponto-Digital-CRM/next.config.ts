@@ -42,8 +42,11 @@ const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
   poweredByHeader: false,
+  // Fotos de clientes para os vídeos com avatar (até 10 MB) chegam por Server Action; o padrão é 1 MB.
+  experimental: { serverActions: { bodySizeLimit: "11mb" } },
   // Biblioteca do WhatsApp Web experimental: carregada pelo Node, sem empacotar (usa WebAssembly e módulos nativos do Node).
-  serverExternalPackages: ["baileys"],
+  // ffmpeg-static: binário do FFmpeg (marca d'água dos vídeos), localizado pelo caminho real em node_modules.
+  serverExternalPackages: ["baileys", "ffmpeg-static"],
   async headers() {
     return [
       { source: "/:path*", headers: securityHeaders },

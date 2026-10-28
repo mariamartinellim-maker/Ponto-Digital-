@@ -1,4 +1,4 @@
-import { CheckCircle2, Circle, Link2, Lock, RefreshCw, ShieldCheck, Smartphone, Webhook } from "lucide-react";
+import { CheckCircle2, Circle, Link2, Lock, RefreshCw, ShieldCheck, Smartphone, UserRound, Webhook } from "lucide-react";
 import { Badge, Card, CardHeader, Notice, PageHeader } from "@/components/ui";
 import { ActionForm } from "@/components/ui/action-form";
 import { requireUser } from "@/lib/auth/session";
@@ -8,7 +8,10 @@ import { formatPhone } from "@/lib/phone";
 import { hasSupabaseAdmin, supabaseAdmin } from "@/lib/supabase/admin";
 import { isSupabase, supabaseServer } from "@/lib/supabase/server";
 import { linkEnvNumberAction, retrySyncAction } from "./actions";
+import { waCredentials } from "@/lib/whatsapp/client";
+import { getBusinessProfile, PROFILE_DEFAULTS, VERTICALS, type BusinessProfile } from "@/lib/whatsapp/profile";
 import { CoexistenceConnect } from "./coexistence-connect";
+import { ProfileForm } from "./profile-form";
 
 export const metadata = { title: "WhatsApp Business" };
 export const instant = false;
@@ -82,6 +85,22 @@ export default async function WhatsAppSettingsPage() {
     }
   }
   const connected = Boolean(account || linkedPhoneId);
+  // Perfil comercial atual na Meta; campos vazios recebem o perfil sugerido.
+  let profile: BusinessProfile | null = null;
+  let photoUrl: string | null = null;
+  const creds = await waCredentials(user.orgId);
+  if (creds) {
+    const cur = await getBusinessProfile(creds.phoneNumberId, creds.token).catch(() => null);
+    photoUrl = cur?.profile_picture_url ?? null;
+    profile = {
+      about: cur?.about || PROFILE_DEFAULTS.about,
+      description: cur?.description || PROFILE_DEFAULTS.description,
+      vertical: cur?.vertical && cur.vertical in VERTICALS ? cur.vertical : PROFILE_DEFAULTS.vertical,
+      address: cur?.address || PROFILE_DEFAULTS.address,
+      email: cur?.email || PROFILE_DEFAULTS.email,
+      websites: cur?.websites?.length ? cur.websites : PROFILE_DEFAULTS.websites,
+    };
+  }
   const syncWindowOpen = account ? requestTime() - new Date(account.onboarded_at).getTime() < 24 * 3600_000 : false;
 
   return (
@@ -186,6 +205,13 @@ export default async function WhatsAppSettingsPage() {
             <Item ok label="IA apenas sugere: nenhuma resposta automática é enviada" />
           </ul>
         </Card>
+
+        {profile && (
+          <Card className="xl:col-span-2">
+            <CardHeader title={<span className="flex items-center gap-2"><UserRound className="size-4 text-brand-600" /> Perfil do WhatsApp</span>} description="Foto, recado, descrição e Instagram que os clientes veem no número oficial." />
+            <ProfileForm profile={profile} verticals={VERTICALS} photoUrl={photoUrl} />
+          </Card>
+        )}
 
         <Card className="xl:col-span-2">
           <CardHeader title={<span className="flex items-center gap-2"><Webhook className="size-4 text-brand-600" /> Webhook (configurar no app da Meta)</span>} description="Meta for Developers → seu app → WhatsApp → Configuração." />

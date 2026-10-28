@@ -27,6 +27,7 @@ export const PERMISSIONS = {
   "finance:manage": "Financeiro: confirmar comprovantes e lançamentos",
   "production:manage": "Atualizar ordens de produção",
   "guardian:manage": "Guardian: monitoramento, backups e recuperação",
+  "videos:manage": "Vídeos com avatar: criar pedidos e enviar prévias",
 } as const;
 
 export type Permission = keyof typeof PERMISSIONS;
@@ -47,6 +48,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "media:read",
     "sales:manage",
     "production:manage",
+    "videos:manage",
   ],
 };
 

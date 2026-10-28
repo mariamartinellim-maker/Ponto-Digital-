@@ -121,6 +121,7 @@
     --container-sm: 24rem;
     --container-md: 28rem;
     --container-lg: 32rem;
+    --container-2xl: 42rem;
     --container-3xl: 48rem;
     --text-xs: .75rem;
     --text-xs--line-height: calc(1 / .75);
@@ -704,6 +705,10 @@
     field-sizing: content;
   }
 
+  .aspect-\[9\/16\] {
+    aspect-ratio: 9 / 16;
+  }
+
   .size-1\.5 {
     width: calc(var(--spacing) * 1.5);
     height: calc(var(--spacing) * 1.5);
@@ -767,6 +772,11 @@
   .size-14 {
     width: calc(var(--spacing) * 14);
     height: calc(var(--spacing) * 14);
+  }
+
+  .size-16 {
+    width: calc(var(--spacing) * 16);
+    height: calc(var(--spacing) * 16);
   }
 
   .size-\[18px\] {
@@ -914,6 +924,10 @@
 
   .w-full {
     width: 100%;
+  }
+
+  .max-w-2xl {
+    max-width: var(--container-2xl);
   }
 
   .max-w-3xl {
@@ -1302,6 +1316,10 @@
     border-color: var(--color-brand-300);
   }
 
+  .border-brand-600 {
+    border-color: var(--color-brand-600);
+  }
+
   .border-emerald-200 {
     border-color: var(--color-emerald-200);
   }
@@ -1596,6 +1614,10 @@
 
   .object-contain {
     object-fit: contain;
+  }
+
+  .object-cover {
+    object-fit: cover;
   }
 
   .p-0\.5 {
@@ -2172,6 +2194,10 @@
     text-transform: uppercase;
   }
 
+  .italic {
+    font-style: italic;
+  }
+
   .tabular-nums {
     --tw-numeric-spacing: tabular-nums;
     font-variant-numeric: var(--tw-ordinal, ) var(--tw-slashed-zero, ) var(--tw-numeric-figure, ) var(--tw-numeric-spacing, ) var(--tw-numeric-fraction, );
@@ -2587,6 +2613,10 @@
     opacity: .4;
   }
 
+  .disabled\:opacity-50:disabled {
+    opacity: .5;
+  }
+
   .disabled\:opacity-60:disabled {
     opacity: .6;
   }
@@ -2824,6 +2854,10 @@
       grid-template-columns: 1fr 380px;
     }
 
+    .xl\:grid-cols-\[1fr_400px\] {
+      grid-template-columns: 1fr 400px;
+    }
+
     .xl\:grid-cols-\[minmax\(0\,1fr\)_420px\] {
       grid-template-columns: minmax(0, 1fr) 420px;
     }
@@ -2856,6 +2890,10 @@
 
     .\32 xl\:grid-cols-3 {
       grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .\32 xl\:grid-cols-4 {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
     }
   }
 }

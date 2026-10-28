@@ -65,6 +65,12 @@ async function loadOrgMap(): Promise<OrgMap> {
   return map;
 }
 
+/** Organização dona de cada envelope (pelo número ou pela conta WhatsApp Business). */
+export async function orgResolver(): Promise<(envl: WaEnvelope) => string | null> {
+  const map = await loadOrgMap();
+  return (envl) => (envl.phoneNumberId && map.byPhone.get(envl.phoneNumberId)) || (!envl.phoneNumberId && envl.wabaId && map.byWaba.get(envl.wabaId)) || null;
+}
+
 export interface IngestStats {
   [k: string]: number;
 }

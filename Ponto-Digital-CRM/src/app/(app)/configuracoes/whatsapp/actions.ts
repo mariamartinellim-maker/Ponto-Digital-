@@ -10,6 +10,7 @@ import { isSupabase } from "@/lib/supabase/server";
 import { waCredentials } from "@/lib/whatsapp/client";
 import { encryptSecret } from "@/lib/whatsapp/crypto";
 import { exchangeCode, graph, GraphError } from "@/lib/whatsapp/graph";
+import { updateBusinessProfile, VERTICALS } from "@/lib/whatsapp/profile";
 
 export type ConnectState = { error?: string; ok?: string } | undefined;
 
@@ -192,4 +193,39 @@ export async function linkEnvNumberAction(): Promise<ConnectState> {
   await audit({ orgId: admin.orgId, userId: admin.id, action: "whatsapp.numero_vinculado", entity: "whatsapp", entityId: e.WHATSAPP_PHONE_NUMBER_ID, details: `${info.display_phone_number ?? ""}; coexistência: ${info.is_on_biz_app ? "sim" : "não informado"}`, ip: await clientIp() });
   revalidatePath("/configuracoes/whatsapp");
   return { ok: `Número ${info.display_phone_number ?? ""} vinculado. ${info.is_on_biz_app ? "Coexistência com o app confirmada pela Meta." : "Atenção: a Meta não confirmou coexistência com o app para este número."}` };
+}
+
+const profileSchema = z.object({
+  about: z.string().trim().min(1, "Escreva o recado.").max(139, "O recado tem no máximo 139 caracteres."),
+  description: z.string().trim().max(512, "A descrição tem no máximo 512 caracteres."),
+  vertical: z.enum(Object.keys(VERTICALS) as [string, ...string[]]),
+  address: z.string().trim().max(256),
+  email: z.union([z.literal(""), z.string().trim().email("E-mail inválido.").max(128)]),
+  site1: z.union([z.literal(""), z.string().trim().url("Site inválido (comece com https://).").max(256)]),
+  site2: z.union([z.literal(""), z.string().trim().url("Site inválido (comece com https://).").max(256)]),
+});
+
+/** Atualiza o perfil comercial do número oficial na Meta (foto, recado, descrição, categoria, endereço, sites). */
+export async function updateProfileAction(_: ConnectState, formData: FormData): Promise<ConnectState> {
+  const admin = await authorize("settings:manage");
+  const parsed = profileSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
+  const creds = await waCredentials(admin.orgId);
+  if (!creds) return { error: "Número oficial não configurado no servidor." };
+  const p = parsed.data;
+  let photo: { bytes: Buffer; mime: string } | "padrao" | null = formData.get("usarLogo") === "on" ? "padrao" : null;
+  const file = formData.get("foto");
+  if (file instanceof File && file.size > 0) {
+    if (!["image/jpeg", "image/png"].includes(file.type)) return { error: "A foto precisa ser JPG ou PNG." };
+    if (file.size > 5 * 1024 * 1024) return { error: "A foto pode ter até 5 MB." };
+    photo = { bytes: Buffer.from(await file.arrayBuffer()), mime: file.type };
+  }
+  try {
+    await updateBusinessProfile(creds.phoneNumberId, creds.token, { about: p.about, description: p.description, vertical: p.vertical, address: p.address, email: p.email, websites: [p.site1, p.site2].filter(Boolean) }, photo);
+  } catch (err) {
+    return { error: `A Meta recusou: ${err instanceof Error ? err.message : "erro"}` };
+  }
+  await audit({ orgId: admin.orgId, userId: admin.id, action: "whatsapp.perfil_atualizado", entity: "whatsapp", entityId: creds.phoneNumberId, details: photo ? "com foto" : "sem foto", ip: await clientIp() });
+  revalidatePath("/configuracoes/whatsapp");
+  return { ok: "Perfil do WhatsApp atualizado." };
 }
