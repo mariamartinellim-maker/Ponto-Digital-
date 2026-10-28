@@ -9,6 +9,7 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 W, H = 720, 1280
 BOLD = "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"
 OUT = Path(__file__).resolve().parent.parent / "assets" / "video" / "marca-dagua.png"
+WA_ICON = OUT.parent / "whatsapp-icone.png"
 
 
 def centered(draw, y, text, font):
@@ -44,6 +45,29 @@ def main():
     OUT.parent.mkdir(parents=True, exist_ok=True)
     out.save(OUT, optimize=True)
     print(f"Gerado: {OUT}")
+    whatsapp_icon()
+
+
+def whatsapp_icon(size=48):
+    """Ícone do WhatsApp (balão verde com telefone) para o rodapé do vídeo, desenhado em 4x e reduzido."""
+    S = size * 4
+    im = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    green, white = (37, 211, 102, 255), (255, 255, 255, 255)
+    c, r = S // 2, int(S * 0.40)
+    # balão branco com "rabinho" embaixo à esquerda e miolo verde
+    d.polygon([(int(S * 0.20), int(S * 0.66)), (int(S * 0.08), int(S * 0.94)), (int(S * 0.38), int(S * 0.84))], fill=white)
+    d.ellipse((c - r - 16, c - r - 16, c + r + 16, c + r + 16), fill=white)
+    d.ellipse((c - r + 8, c - r + 8, c + r - 8, c + r - 8), fill=green)
+    # telefone: arco grosso com as duas pontas arredondadas
+    hr = int(r * 0.52)
+    d.arc((c - hr, c - hr, c + hr, c + hr), start=95, end=200, fill=white, width=int(S * 0.085))
+    for ax, ay in ((-0.98, -0.20), (-0.08, 0.99)):
+        px, py, e = int(c + ax * hr), int(c + ay * hr), int(S * 0.075)
+        d.ellipse((px - e, py - e, px + e, py + e), fill=white)
+    im = im.rotate(-12, resample=Image.BICUBIC, center=(c, c))
+    im.resize((size, size), Image.LANCZOS).save(WA_ICON, optimize=True)
+    print(f"Gerado: {WA_ICON}")
 
 
 if __name__ == "__main__":

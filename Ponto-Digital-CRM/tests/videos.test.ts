@@ -63,7 +63,8 @@ describe("regras dos vídeos com avatar", () => {
     expect(validateOrderInput(ok)).toBeNull();
     expect(validateOrderInput({ ...ok, driverName: "  " })).toMatch(/nome/);
     expect(validateOrderInput({ ...ok, speech: Array(31).fill("palavra").join(" ") })).toMatch(/30 palavras/);
-    expect(validateOrderInput({ ...ok, modality: "moto" })).toMatch(/Uber ou Táxi/);
+    expect(validateOrderInput({ ...ok, modality: "moto" })).toMatch(/segmento/);
+    expect(validateOrderInput({ ...ok, modality: "mototaxi" })).toBeNull();
     expect(validateOrderInput({ ...ok, contactPhone: "123" })).toMatch(/inválido/);
   });
 
@@ -82,6 +83,15 @@ describe("regras dos vídeos com avatar", () => {
   it("formata telefone, encerramento, limite do mês e travamento", () => {
     expect(formatBrPhone("5565999990000")).toBe("(65) 99999-0000");
     expect(endCardLines(order({}))).toEqual({ title: "Benner Táxi", subtitle: "TÁXI", phone: "(65) 99999-0000" });
+    expect(endCardLines(order({ modality: "mototaxi" })).subtitle).toBe("MOTOTÁXI");
+  });
+
+  it("adapta a cena ao segmento do motorista", () => {
+    expect(avatarPrompt(order({ modality: "mototaxi" }))).toMatch(/pilotando a moto[\s\S]*capacete aberto[\s\S]*garupa/);
+    expect(avatarPrompt(order({ modality: "mototaxi" }))).not.toMatch(/volante/);
+    expect(animationPrompt(order({ modality: "motoboy" }))).not.toMatch(/passageiros/i);
+    expect(avatarPrompt(order({ modality: "van" }))).toMatch(/van de passageiros/);
+    expect(avatarPrompt(order({ modality: "executivo" }))).toMatch(/sedã preto/);
     expect(monthStartCuiaba(new Date("2026-11-01T02:00:00Z"))).toBe("2026-10-01T04:00:00.000Z"); // ainda 31/10 em Cuiabá
     expect(paidRunsLeft(18, 20)).toBe(2);
     expect(paidRunsLeft(25, 20)).toBe(0);

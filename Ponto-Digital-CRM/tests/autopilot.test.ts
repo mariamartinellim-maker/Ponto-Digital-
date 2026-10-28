@@ -52,6 +52,11 @@ describe("cérebro do robô (sem IA)", () => {
     expect(detectModality("trabalho no Uber e na 99")).toBe("uber");
     expect(detectModality("taxi e uber")).toBeNull();
     expect(detectModality("oi")).toBeNull();
+    expect(detectModality("sou mototaxista")).toBe("mototaxi");
+    expect(detectModality("faço entregas de moto")).toBe("motoboy");
+    expect(detectModality("tenho uma van escolar")).toBe("van");
+    expect(detectModality("faço frete e mudança")).toBe("frete");
+    expect(detectModality("motorista executivo")).toBe("executivo");
     expect(keywordIntent("Pode continuar!")).toEqual({ intent: "aprovado" });
     expect(keywordIntent("ok mas muda a camisa")).toMatchObject({ intent: "ajuste" });
     expect(keywordIntent("troca a cor do carro pra branco")).toMatchObject({ intent: "ajuste", ajuste: "troca a cor do carro pra branco" });

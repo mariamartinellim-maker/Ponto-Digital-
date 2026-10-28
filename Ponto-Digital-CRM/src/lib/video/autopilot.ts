@@ -4,7 +4,7 @@ import { analyzeReceipt, parseBrlToCents } from "../ai/receipt";
 import { getOne, insertOne, listAll, updateOne, type Access } from "../data/collections";
 import { audit, findClientByPhone } from "../data/repo";
 import { getDb, mutate } from "../data/store";
-import type { AutopilotStage, VideoAutopilotSettings, VideoAutopilotState, VideoOrder } from "../data/types";
+import type { AutopilotStage, VideoAutopilotSettings, VideoAutopilotState, VideoModality, VideoOrder } from "../data/types";
 import { env, testNumbers } from "../env";
 import { saveAsset } from "../media/storage";
 import { normalizePhone, phoneDedupKey } from "../phone";
@@ -21,7 +21,7 @@ import { confirmPayment, createOrderCore, sendStep, startGeneration, SYSTEM } fr
 
 /*
  * ATENDIMENTO AUTOMÁTICO DOS VÍDEOS (robô), no fluxo combinado com a equipe:
- *  1. contato novo vindo de anúncio → áudio gravado "Seria sobre os vídeos de Uber ou de táxi?"
+ *  1. contato novo vindo de anúncio → áudio gravado (pergunta o segmento do motorista)
  *  2. cliente responde a modalidade → áudio "Vamos precisar apenas de uma foto sua e das informações…"
  *  3. foto + informações → a IA escreve a fala, cria o pedido e gera o avatar → avatar enviado para aprovar
  *  4. "pode continuar" → gera o vídeo → prévia com marca d'água + valor e chave Pix
@@ -40,7 +40,7 @@ export const TAG_NEW = "novo cliente";
 export const TAG_DONE = "cliente finalizado";
 
 export const STAGE_LABEL: Record<AutopilotStage, string> = {
-  perguntou_modalidade: "Perguntou Uber ou táxi",
+  perguntou_modalidade: "Perguntou o segmento",
   pediu_foto: "Pediu foto e informações",
   roteiro: "Roteiro (aprovação)",
   avatar: "Avatar (aprovação)",
@@ -57,8 +57,8 @@ export function greeting(now = new Date()) {
 
 /** Textos no tom da casa: curtos, calorosos, sem cara de robô (base: padrões reais de atendimento). */
 export const TEXTS = {
-  ask: "Seu contato seria sobre o vídeo de Uber ou de táxi?",
-  askAgain: "Me fala só uma coisa: o vídeo seria pra Uber ou pra táxi?",
+  ask: "Seu contato seria sobre o vídeo pra motorista? Me conta com o que você trabalha (aplicativo, táxi, mototáxi, entregas, van, executivo...) que a gente adapta o vídeo pro seu segmento.",
+  askAgain: "Me fala só uma coisa: você trabalha com aplicativo, táxi, mototáxi, entregas, van, frete ou outro? Assim já adapto o vídeo pra você.",
   photo: "Perfeito! Pra criar o seu vídeo vou precisar só de uma foto sua (pode ser do rosto) e de umas informações: seu nome, a cidade que você atende e o WhatsApp pros passageiros te chamarem",
   needInfo: "Recebi sua foto! Agora me fala seu nome, a cidade que você atende e o WhatsApp pros passageiros te chamarem",
   needPhoto: "Show! Agora só falta uma foto sua, pode ser do rosto",
@@ -323,7 +323,13 @@ async function step(msg: InboundMessage, s: VideoAutopilotSettings, t: Target, f
       }
       const modality = detectModality(text);
       if (modality) return askPhoto(st, s, t, modality);
-      if (st.retries >= 2) return handoff(st, t, "Não entendeu se o vídeo é de Uber ou táxi.");
+      // Segunda resposta sem segmento conhecido: segue como motorista particular e guarda o que ele disse,
+      // para o roteiro se adaptar ao segmento dele.
+      if (st.retries >= 1 && text.trim()) {
+        await patchState(st, { info: `Segmento informado pelo cliente: ${text.trim().slice(0, 300)}` });
+        return askPhoto(st, s, t, "particular");
+      }
+      if (st.retries >= 2) return handoff(st, t, "Não entendeu o segmento do motorista.");
       await patchState(st, { retries: st.retries + 1 });
       await say(t, orgId, { kind: "text", body: TEXTS.askAgain });
       return;
@@ -356,14 +362,14 @@ async function step(msg: InboundMessage, s: VideoAutopilotSettings, t: Target, f
   }
 }
 
-async function askPhoto(st: VideoAutopilotState, s: VideoAutopilotSettings, t: Target, modality: "uber" | "taxi") {
+async function askPhoto(st: VideoAutopilotState, s: VideoAutopilotSettings, t: Target, modality: VideoModality) {
   await patchState(st, { stage: "pediu_foto", modality, retries: 0 });
   await say(t, st.orgId, voiceOr(s.audioPhotoAssetId, TEXTS.photo));
 }
 
 /** Roteiro curto (cabe nos 10 s) para o cliente aprovar antes do avatar. Se resumiu, explica o porquê. */
 async function proposeScript(st: VideoAutopilotState, t: Target) {
-  const draft = await draftOrder({ modality: st.modality ?? "uber", clientName: t.client.name, text: st.info });
+  const draft = await draftOrder({ modality: st.modality ?? "particular", clientName: t.client.name, text: st.info });
   if (!draft.contactPhone) draft.contactPhone = t.client.phone;
   await sendScript(st, t, draft);
 }
@@ -385,7 +391,7 @@ async function scriptStep(st: VideoAutopilotState, t: Target, msg: InboundMessag
   const r = await classifyReply(text, "roteiro");
   if (r.intent === "aprovado") return createFromConversation(st, t);
   if (r.intent === "ajuste") {
-    const revised = await reviseDraft(st.draft, r.ajuste, st.modality ?? "uber");
+    const revised = await reviseDraft(st.draft, r.ajuste, st.modality ?? "particular");
     if (!revised) return handoff(st, t, `Cliente pediu ajuste no roteiro: "${r.ajuste}"`);
     return sendScript(st, t, revised);
   }
@@ -395,7 +401,7 @@ async function scriptStep(st: VideoAutopilotState, t: Target, msg: InboundMessag
 }
 
 async function createFromConversation(st: VideoAutopilotState, t: Target) {
-  const modality = st.modality ?? "uber";
+  const modality = st.modality ?? "particular";
   const draft = st.draft ?? (await draftOrder({ modality, clientName: t.client.name, text: st.info }));
   const created = await createOrderCore(SYSTEM(st.orgId), t.client, t.conversationId, { modality, ...draft }, st.photoAssetId!, true);
   if (!created.ok) return handoff(st, t, `Pedido não criado: ${created.error}`);

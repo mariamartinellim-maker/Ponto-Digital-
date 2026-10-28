@@ -1,7 +1,7 @@
 # Vídeos com avatar e atendimento automático
 
 ## Fluxo
-1. Contato novo vindo de anúncio → "Oieh, boa noite! Tudo bem?" + "Seu contato seria sobre o vídeo de Uber ou de táxi?" (ou o áudio gravado).
+1. Contato novo vindo de anúncio → "Oieh, boa noite! Tudo bem?" + "Seu contato seria sobre o vídeo pra motorista? Me conta com o que você trabalha (aplicativo, táxi, mototáxi, entregas, van, executivo...)" (ou o áudio gravado). Atendemos todos os segmentos: aplicativo, táxi, mototáxi, motoboy, executivo, van, frete e particular; cena do avatar e logo final se adaptam a cada um.
 2. Cliente responde a modalidade → pede a foto e as informações (nome, cidade, WhatsApp) (ou o áudio gravado).
 3. Foto + informações → a IA (Claude) escreve um **roteiro curto** e envia para o cliente aprovar. Se ele mandou mais do que cabe, o robô enxuga e explica.
 4. "pode continuar" → avatar (OpenAI) → enviado para aprovar. Ajuste → refaz com o ajuste.

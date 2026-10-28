@@ -16,7 +16,21 @@ export const VIDEO_STATUS: Record<VideoOrderStatus, { label: string; tone: "slat
   cancelado: { label: "Cancelado", tone: "slate" },
 };
 
-export const MODALITY_LABEL: Record<VideoModality, string> = { uber: "Uber", taxi: "Táxi" };
+type Vehicle = "carro" | "van" | "moto" | "cabine";
+/** Segmentos atendidos: cena do avatar, texto da logo final e nome padrão de cada um. */
+export const SEGMENTS: Record<VideoModality, { label: string; subtitle: string; suffix: string; vehicle: Vehicle; scene: string; speech: string }> = {
+  uber: { label: "Aplicativo (Uber, 99…)", subtitle: "MOTORISTA DE APLICATIVO", suffix: "Motorista", vehicle: "carro", scene: "", speech: "Precisando de uma corrida? Viagem segura, carro confortável e pontualidade. Me chama no WhatsApp!" },
+  taxi: { label: "Táxi", subtitle: "TÁXI", suffix: "Táxi", vehicle: "carro", scene: " O carro é um táxi.", speech: "Precisando de táxi? Atendimento rápido, seguro e com conforto. Me chama no WhatsApp!" },
+  mototaxi: { label: "Mototáxi", subtitle: "MOTOTÁXI", suffix: "Mototáxi", vehicle: "moto", scene: " Passageiro na garupa, de capacete, sorrindo. O piloto usa colete de mototaxista.", speech: "Precisando chegar rápido? Mototáxi com segurança, capacete pro passageiro e preço justo. Me chama no WhatsApp!" },
+  motoboy: { label: "Motoboy / entregas", subtitle: "MOTOBOY · ENTREGAS", suffix: "Motoboy", vehicle: "moto", scene: " Moto com baú de entregas na traseira, sem passageiro.", speech: "Precisa entregar alguma coisa? Entrega rápida, com cuidado e no horário. Me chama no WhatsApp!" },
+  executivo: { label: "Motorista executivo", subtitle: "MOTORISTA EXECUTIVO", suffix: "Executivo", vehicle: "carro", scene: " Carro sedã preto executivo; motorista bem vestido, de camisa social e paletó.", speech: "Transporte executivo com conforto, discrição e pontualidade. Me chama no WhatsApp e agende!" },
+  van: { label: "Van / transporte escolar", subtitle: "TRANSPORTE EM VAN", suffix: "Transportes", vehicle: "van", scene: "", speech: "Transporte em van com segurança, conforto e pontualidade. Me chama no WhatsApp!" },
+  frete: { label: "Frete / carreto", subtitle: "FRETES E CARRETOS", suffix: "Fretes", vehicle: "cabine", scene: "", speech: "Precisando de frete ou mudança? Carga bem cuidada, rapidez e preço justo. Me chama no WhatsApp!" },
+  particular: { label: "Motorista particular / outro", subtitle: "MOTORISTA PARTICULAR", suffix: "Motorista", vehicle: "carro", scene: "", speech: "Precisando de motorista? Viagem segura, carro confortável e pontualidade. Me chama no WhatsApp!" },
+};
+export const MODALITIES = Object.keys(SEGMENTS) as VideoModality[];
+export const isModality = (v: string): v is VideoModality => Object.hasOwn(SEGMENTS, v);
+export const MODALITY_LABEL = Object.fromEntries(MODALITIES.map((m) => [m, SEGMENTS[m].label])) as Record<VideoModality, string>;
 
 /** Colunas do quadro, na ordem do fluxo. */
 export const VIDEO_COLUMNS: { id: string; label: string; statuses: VideoOrderStatus[] }[] = [
@@ -85,7 +99,7 @@ export function validateOrderInput(i: { driverName: string; speech: string; cont
   if (!promptText(i.driverName, 80)) return "Informe o nome que aparece no vídeo (ex.: \"Benner Táxi\" ou \"Motorista RJ\").";
   if (!promptText(i.speech, 400)) return "Informe a fala do motorista.";
   if (i.speech.length > 400 || wordCount(i.speech) > MAX_SPEECH_WORDS) return `A fala pode ter até ${MAX_SPEECH_WORDS} palavras (o vídeo tem 8 s de fala).`;
-  if (i.modality !== "uber" && i.modality !== "taxi") return "Escolha Uber ou Táxi.";
+  if (!isModality(i.modality)) return "Escolha o segmento do motorista.";
   if (i.driverGender && i.driverGender !== "masculino" && i.driverGender !== "feminino") return "Escolha motorista homem ou mulher.";
   if (i.contactPhone && i.contactPhone.replace(/\D/g, "").length < 10) return "WhatsApp do vídeo inválido (use DDD + número).";
   return null;
@@ -93,17 +107,36 @@ export function validateOrderInput(i: { driverName: string; speech: string; cont
 
 type PromptOrder = Pick<VideoOrder, "modality" | "driverName" | "driverGender" | "city" | "speech" | "adjustments">;
 
+function avatarScene(m: VideoModality, who: string): string[] {
+  const seg = SEGMENTS[m];
+  if (seg.vehicle === "moto") {
+    return [
+      "Crie uma imagem fotorrealista no formato vertical 1080x1920 (9:16), como se fosse uma selfie de alta qualidade: câmera à frente da moto, de frente para o piloto.",
+      `${who[0]!.toUpperCase()}${who.slice(1)} pilotando a moto na rua, de capacete aberto com a viseira levantada (rosto totalmente visível), mãos no guidão, sorrindo, olhando para a câmera.${seg.scene}`,
+    ];
+  }
+  const where = seg.vehicle === "van" ? "dentro de uma van de passageiros" : seg.vehicle === "cabine" ? "dentro da cabine de um caminhãozinho de fretes" : "dentro do carro";
+  const back = seg.vehicle === "van"
+    ? "Passageiros sentados nos bancos de trás da van, todos de cinto e de frente."
+    : seg.vehicle === "cabine"
+      ? "Carroceria com carga bem arrumada aparecendo pelo vidro de trás. Todos de cinto."
+      : "Um casal no banco de trás com a garrafinha d'água, todos de cinto. Todo mundo de frente.";
+  return [
+    `Crie uma imagem fotorrealista no formato vertical 1080x1920 (9:16): avatar ${where}, como se fosse uma selfie de alta qualidade, imagem de alta qualidade, câmera na parte frontal interna do veículo, de frente para os ocupantes.`,
+    "Motorista no banco do lado ESQUERDO (padrão Brasil), com a mão no volante, olhando para frente, sorrindo.",
+    `Como a câmera está de frente, na imagem ${who} e o volante aparecem do lado DIREITO da foto e o banco do carona vazio aparece do lado ESQUERDO da foto.`,
+    `${back}${seg.scene}`,
+  ];
+}
+
 /** Prompt OFICIAL do avatar dentro do carro (o mesmo usado no ChatGPT), com a foto do cliente anexada. */
 export function avatarPrompt(o: PromptOrder) {
   const woman = o.driverGender === "feminino";
   const city = promptText(o.city, 80);
   return [
     `Use ${woman ? "a mulher da foto anexada como a motorista" : "a pessoa da foto anexada como o motorista"}, mantendo exatamente o mesmo rosto, cabelo, ${woman ? "" : "barba "}e traços.`,
-    "Crie uma imagem fotorrealista no formato vertical 1080x1920 (9:16): avatar dentro do carro, como se fosse uma selfie de alta qualidade, imagem de alta qualidade, câmera na parte frontal interna do veículo, de frente para os ocupantes.",
-    `Motorista no banco do lado ESQUERDO do carro (padrão Brasil), com a mão no volante, olhando para frente, sorrindo.`,
-    `Como a câmera está de frente, na imagem ${woman ? "a motorista" : "o motorista"} e o volante aparecem do lado DIREITO da foto e o banco do carona vazio aparece do lado ESQUERDO da foto.`,
-    `Um casal no banco de trás com a garrafinha d'água, todos de cinto. Todo mundo de frente.${o.modality === "taxi" ? " O carro é um táxi." : ""}`,
-    `Iluminação natural de dia, paisagem ${city ? `da cidade de ${city}` : "da cidade do cliente"} nas janelas. Sem textos na imagem.`,
+    ...avatarScene(o.modality, woman ? "a motorista" : "o motorista"),
+    `Iluminação natural de dia, paisagem ${city ? `da cidade de ${city}` : "da cidade do cliente"} ${SEGMENTS[o.modality].vehicle === "moto" ? "ao fundo" : "nas janelas"}. Sem textos na imagem.`,
     o.adjustments ? `Ajustes pedidos pelo cliente: ${promptText(o.adjustments, 500)}` : "",
   ]
     .filter(Boolean)
@@ -118,12 +151,17 @@ export function avatarPrompt(o: PromptOrder) {
 export function animationPrompt(o: PromptOrder) {
   const woman = o.driverGender === "feminino";
   const m = woman ? "a motorista" : "o motorista";
+  const M = `${m[0]!.toUpperCase()}${m.slice(1)}`;
+  const moto = SEGMENTS[o.modality].vehicle === "moto";
+  const alone = o.modality === "motoboy" || SEGMENTS[o.modality].vehicle === "cabine";
   return [
     `PROMPT DE ANIMAÇÃO — ${promptText(o.driverName, 80)} | 8 SEGUNDOS. FALA D${woman ? "A" : "O"} MOTORISTA: "${promptText(o.speech, 400)}"`,
-    `DIREÇÃO DE CENA: ${m[0]!.toUpperCase()}${m.slice(1)} fala do início ao fim, extremamente animad${woman ? "a" : "o"}, carismátic${woman ? "a" : "o"}, sorridente e eloquente, com energia de apresentador${woman ? "a" : ""} de comercial de televisão.`,
-    `ENQUADRAMENTO OBRIGATÓRIO: Câmera em plano aberto, posicionada na parte frontal interna do veículo, mostrando simultaneamente ${m} dirigindo, o banco do passageiro dianteiro e o casal de passageiros no banco traseiro. Manter todos os ocupantes visíveis durante toda a fala, sem cortes, sem mudar o ângulo e sem aproximar excessivamente a câmera. O veículo permanece em movimento, com paisagem externa passando naturalmente pelas janelas.`,
-    `ANIMAÇÃO E SINCRONIZAÇÃO: Apenas ${m} fala, do início ao fim. Sincronização labial perfeita em português brasileiro. Voz ${woman ? "FEMININA" : "masculina"} extremamente animada, vibrante e convincente. Passageiros permanecem sorridentes, com movimentos naturais, sem falar. Todos utilizando cinto de segurança. ${m[0]!.toUpperCase()}${m.slice(1)} mantém as mãos no volante e a atenção na estrada. Movimentos cinematográficos suaves, sem alterar rostos ou características dos personagens.`,
-    "REGRAS: Formato story vertical 9:16. Não cortar a fala. Não trocar de cenário durante a locução. Não esconder os passageiros. Não adicionar outras vozes. Sem textos, legendas ou logotipos na tela. Preservar a identidade original dos personagens.",
+    `DIREÇÃO DE CENA: ${M} fala do início ao fim, extremamente animad${woman ? "a" : "o"}, carismátic${woman ? "a" : "o"}, sorridente e eloquente, com energia de apresentador${woman ? "a" : ""} de comercial de televisão.`,
+    moto
+      ? `ENQUADRAMENTO OBRIGATÓRIO: Câmera à frente da moto, plano médio, mostrando ${m} pilotando${o.modality === "mototaxi" ? " e o passageiro na garupa" : ""}, sem cortes, sem mudar o ângulo. A moto anda devagar, com a rua passando naturalmente ao fundo.`
+      : `ENQUADRAMENTO OBRIGATÓRIO: Câmera em plano aberto, posicionada na parte frontal interna do veículo, mostrando simultaneamente ${m} dirigindo, o banco do passageiro dianteiro${alone ? "" : " e os passageiros no banco traseiro"}. Manter todos os ocupantes visíveis durante toda a fala, sem cortes, sem mudar o ângulo e sem aproximar excessivamente a câmera. O veículo permanece em movimento, com paisagem externa passando naturalmente pelas janelas.`,
+    `ANIMAÇÃO E SINCRONIZAÇÃO: Apenas ${m} fala, do início ao fim. Sincronização labial perfeita em português brasileiro. Voz ${woman ? "FEMININA" : "masculina"} extremamente animada, vibrante e convincente.${alone ? "" : " Passageiros permanecem sorridentes, com movimentos naturais, sem falar."} ${moto ? `${M} usa capacete aberto e mantém as mãos no guidão.` : `Todos utilizando cinto de segurança. ${M} mantém as mãos no volante e a atenção na estrada.`} Movimentos cinematográficos suaves, sem alterar rostos ou características dos personagens.`,
+    `REGRAS: Formato story vertical 9:16. Não cortar a fala. Não trocar de cenário durante a locução.${alone ? "" : " Não esconder os passageiros."} Não adicionar outras vozes. Sem textos, legendas ou logotipos na tela. Preservar a identidade original dos personagens.`,
     o.adjustments ? `AJUSTES PEDIDOS PELO CLIENTE: ${promptText(o.adjustments, 500)}` : "",
   ]
     .filter(Boolean)
@@ -134,7 +172,7 @@ export function animationPrompt(o: PromptOrder) {
 export function endCardLines(o: Pick<VideoOrder, "modality" | "driverName" | "contactPhone">) {
   return {
     title: promptText(o.driverName, 40),
-    subtitle: o.modality === "taxi" ? "TÁXI" : "MOTORISTA DE APLICATIVO",
+    subtitle: SEGMENTS[o.modality]?.subtitle ?? "MOTORISTA",
     phone: o.contactPhone ? formatBrPhone(o.contactPhone) : "",
   };
 }

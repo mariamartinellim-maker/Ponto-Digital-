@@ -16,6 +16,7 @@ import { env } from "../env";
 const ASSETS = path.join(process.cwd(), "assets", "video");
 const WATERMARK = path.join(ASSETS, "marca-dagua.png");
 const FONT = path.join(ASSETS, "LiberationSans-Bold.ttf");
+const WA_ICON = path.join(ASSETS, "whatsapp-icone.png");
 const W = 720;
 const H = 1280;
 const ENC = ["-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart"];
@@ -84,7 +85,7 @@ export async function finishVideo(video: Uint8Array, lines: { title: string; sub
       writeFile(files.title, lines.title || " "),
       writeFile(files.subtitle, lines.subtitle || " "),
       writeFile(files.phone, lines.phone ? `WhatsApp ${lines.phone}` : " "),
-      writeFile(files.wa, ` WhatsApp  ${lines.phone} `),
+      writeFile(files.wa, lines.phone),
     ]);
     const esc = (p: string) => p.replace(/\\/g, "/").replace(/:/g, "\\:");
     const txt = (file: string, size: number, y: string, extra = "fontcolor=white") => `drawtext=fontfile='${esc(FONT)}':textfile='${esc(file)}':fontsize=${size}:${extra}:x=(w-text_w)/2:y=${y}`;
@@ -99,7 +100,11 @@ export async function finishVideo(video: Uint8Array, lines: { title: string; sub
       ...(lines.phone ? [txt(files.phone, 38, "h*0.40+185", gold)] : []),
       "fade=t=in:st=0:d=0.4",
     ].join(",");
-    const waBar = lines.phone ? `,${txt(files.wa, 40, "h-190", "fontcolor=white:box=1:boxcolor=0x25D366@0.95:boxborderw=16")}` : "";
+    // Rodapé: ícone do WhatsApp + número, centralizados numa faixa escura translúcida.
+    const bar = lines.phone ? footerLayout(lines.phone) : null;
+    const waBar = bar
+      ? `,drawbox=x=${bar.boxX}:y=${H - 205}:w=${bar.boxW}:h=72:color=black@0.55:t=fill,drawtext=fontfile='${esc(FONT)}':textfile='${esc(files.wa)}':fontsize=${FOOT_SIZE}:fontcolor=white:x=${bar.textX}:y=${H - 191}[vt];[vt][1:v]overlay=${bar.iconX}:${H - 193}`
+      : "";
     const audio = (await hasAudio(input))
       ? "[0:a]aresample=44100,aformat=channel_layouts=stereo,apad=whole_dur=8,atrim=0:8,asetpts=PTS-STARTPTS[a0]"
       : "anullsrc=r=44100:cl=stereo,atrim=0:8[a0]";
@@ -110,9 +115,21 @@ export async function finishVideo(video: Uint8Array, lines: { title: string; sub
       "anullsrc=r=44100:cl=stereo,atrim=0:2[a1]",
       "[v0][a0][v1][a1]concat=n=2:v=1:a=1[v][a]",
     ].join(";");
-    await run(["-i", input, "-filter_complex", filter, "-map", "[v]", "-map", "[a]", ...ENC, out]);
+    await run(["-i", input, "-i", WA_ICON, "-filter_complex", filter, "-map", "[v]", "-map", "[a]", ...ENC, out]);
     return readFile(out);
   });
+}
+
+const FOOT_SIZE = 42;
+const ICON = 48;
+// Larguras da Liberation Sans Bold (mesmas métricas da Arial) em milésimos de "em": centraliza ícone + número.
+const ADVANCE: Record<string, number> = { " ": 278, "(": 333, ")": 333, "-": 333, "+": 584 };
+export function footerLayout(phone: string) {
+  const textW = Math.round([...phone].reduce((w, ch) => w + (/\d/.test(ch) ? 556 : (ADVANCE[ch] ?? 556)), 0) * (FOOT_SIZE / 1000));
+  const gap = 14;
+  const total = ICON + gap + textW;
+  const iconX = Math.round((W - total) / 2);
+  return { iconX, textX: iconX + ICON + gap, boxX: Math.max(0, iconX - 22), boxW: Math.min(W, total + 44) };
 }
 
 /** Simulador (sem IA): a foto vira um vídeo de 8 s com aproximação lenta. Serve só para testar o fluxo. */

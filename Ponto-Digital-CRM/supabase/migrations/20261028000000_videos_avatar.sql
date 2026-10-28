@@ -1,5 +1,5 @@
 -- =============================================================================
--- Vídeos com avatar (táxi/Uber): pedidos de vídeo e o andamento de cada um.
+-- Vídeos com avatar (todos os segmentos de motorista): pedidos de vídeo e o andamento de cada um.
 --
 --  * Só CRIA a tabela video_orders, seus índices e políticas de acesso (RLS).
 --  * NÃO altera, renomeia ou apaga nenhuma tabela, coluna ou dado existente.
@@ -31,7 +31,7 @@ create table if not exists public.video_orders (
   number integer not null check (number > 0),
   client_id uuid not null,
   conversation_id uuid,
-  modality text not null check (modality in ('uber', 'taxi')),
+  modality text not null check (modality in ('uber', 'taxi', 'mototaxi', 'motoboy', 'executivo', 'van', 'frete', 'particular')),
   driver_name text not null check (length(driver_name) between 1 and 80),
   driver_gender text not null default 'masculino' check (driver_gender in ('masculino', 'feminino')),
   city text not null default '' check (length(city) <= 80),
@@ -123,7 +123,7 @@ create table if not exists public.video_autopilot_states (
   conversation_id uuid not null,
   client_id uuid not null,
   stage text not null check (stage in ('perguntou_modalidade', 'pediu_foto', 'roteiro', 'avatar', 'video', 'finalizado', 'humano')),
-  modality text check (modality in ('uber', 'taxi')),
+  modality text check (modality in ('uber', 'taxi', 'mototaxi', 'motoboy', 'executivo', 'van', 'frete', 'particular')),
   info text not null default '' check (length(info) <= 3000),
   photo_asset_id uuid,
   -- Roteiro (fala, nome no vídeo, cidade…) enviado ao cliente para aprovar antes do avatar.
@@ -151,5 +151,18 @@ begin
     execute $p$create policy autopilot_states_select on public.video_autopilot_states for select to authenticated using (org_id = app.current_org())$p$;
   end if;
 end $pol2$;
+
+-- Se as tabelas já existiam com a lista antiga (só Uber/táxi), amplia para todos os segmentos.
+do $seg$
+declare r record;
+begin
+  for r in select conrelid::regclass as tbl, conname from pg_constraint
+    where conrelid in ('public.video_orders'::regclass, 'public.video_autopilot_states'::regclass)
+      and contype = 'c' and pg_get_constraintdef(oid) like '%modality%' and pg_get_constraintdef(oid) not like '%mototaxi%'
+  loop
+    execute format('alter table %s drop constraint %I', r.tbl, r.conname);
+    execute format('alter table %s add constraint %I check (modality in %s)', r.tbl, r.conname, $l$('uber', 'taxi', 'mototaxi', 'motoboy', 'executivo', 'van', 'frete', 'particular')$l$);
+  end loop;
+end $seg$;
 
 commit;

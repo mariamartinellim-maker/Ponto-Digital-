@@ -388,7 +388,7 @@ export interface AiSuggestionRecord {
 }
 
 /**
- * Pedido de vídeo com avatar (táxi/Uber): foto do cliente → avatar → vídeo → prévia com marca d'água →
+ * Pedido de vídeo com avatar (todos os segmentos de motorista): foto do cliente → avatar → vídeo → prévia com marca d'água →
  * comprovante → vídeo limpo. Cada etapa paga (avatar e vídeo) só roda com a automação ligada e dentro do limite do mês.
  */
 export type VideoOrderStatus =
@@ -403,7 +403,8 @@ export type VideoOrderStatus =
   | "entregue"
   | "falhou"
   | "cancelado";
-export type VideoModality = "uber" | "taxi";
+/** Segmento do motorista: o vídeo (cena, logo final e fala) se adapta a cada um. */
+export type VideoModality = "uber" | "taxi" | "mototaxi" | "motoboy" | "executivo" | "van" | "frete" | "particular";
 export interface VideoOrder {
   id: string;
   orgId: string;
@@ -460,7 +461,7 @@ export interface VideoAutopilotSettings {
   /** Titular e cidade da chave (cartão de cobrança Pix). */
   pixHolder: string;
   pixCity: string;
-  /** Áudio gravado: "Seria sobre os vídeos de Uber ou de táxi?" */
+  /** Áudio gravado de boas-vindas, perguntando o segmento do motorista. */
   audioAskAssetId: string | null;
   /** Áudio gravado: "Vamos precisar apenas de uma foto sua e das informações do seu atendimento." */
   audioPhotoAssetId: string | null;

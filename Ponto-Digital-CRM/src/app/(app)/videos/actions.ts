@@ -5,15 +5,17 @@ import { z } from "zod";
 import { authorize } from "@/lib/auth/session";
 import { getOne } from "@/lib/data/collections";
 import { audit } from "@/lib/data/repo";
+import type { VideoModality } from "@/lib/data/types";
 import { normalizePixKey } from "@/lib/pix";
 import { saveSettings, setConversationStage } from "@/lib/video/autopilot";
+import { MODALITIES } from "@/lib/video/rules";
 import { cancelOrder, confirmPayment, createVideoOrder, sendStep, startGeneration } from "@/lib/video/service";
 
 export type VideoState = { error?: string; ok?: number | string } | undefined;
 
 const schema = z.object({
   clientId: z.string().min(1, "Escolha o cliente.").max(64),
-  modality: z.enum(["uber", "taxi"], { message: "Escolha Uber ou Táxi." }),
+  modality: z.enum(MODALITIES as [VideoModality, ...VideoModality[]], { message: "Escolha o segmento do motorista." }),
   driverGender: z.enum(["masculino", "feminino"], { message: "Escolha motorista homem ou mulher." }),
   driverName: z.string().max(80),
   city: z.string().max(80).default(""),

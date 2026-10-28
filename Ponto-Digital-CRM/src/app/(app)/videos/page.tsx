@@ -7,7 +7,7 @@ import { listAll } from "@/lib/data/collections";
 import { scoped } from "@/lib/data/repo";
 import type { VideoOrder } from "@/lib/data/types";
 import { formatDateTime } from "@/lib/format";
-import { allowedActions, MAX_SPEECH_WORDS, MODALITY_LABEL, VIDEO_COLUMNS, VIDEO_STATUS } from "@/lib/video/rules";
+import { allowedActions, MAX_SPEECH_WORDS, MODALITIES, MODALITY_LABEL, VIDEO_COLUMNS, VIDEO_STATUS } from "@/lib/video/rules";
 import { getSettings, listStates, modalityLabel, STAGE_LABEL } from "@/lib/video/autopilot";
 import { videoUsage, withStuck } from "@/lib/video/service";
 import { autopilotConversationAction, createVideoAction, saveAutopilotAction } from "./actions";
@@ -180,7 +180,7 @@ export default async function VideosPage() {
                     <Input id="pixCity" name="pixCity" maxLength={40} defaultValue={settings?.pixCity ?? "Cuiaba"} />
                   </Field>
                 </div>
-                <Field label='Áudio "Uber ou táxi?"' htmlFor="audioAskAssetId" hint="Da biblioteca de mídias. Sem áudio, vai por escrito.">
+                <Field label="Áudio de boas-vindas (pergunta o segmento)" htmlFor="audioAskAssetId" hint="Da biblioteca de mídias. Sem áudio, vai por escrito.">
                   <Select id="audioAskAssetId" name="audioAskAssetId" defaultValue={settings?.audioAskAssetId ?? ""}>
                     <option value="">Por escrito</option>
                     {audios.map((a) => <option key={a.id} value={a.id}>{a.title}</option>)}
@@ -231,8 +231,9 @@ export default async function VideosPage() {
                 <Field label="Modalidade" htmlFor="modality">
                   <Select id="modality" name="modality" required defaultValue="">
                     <option value="" disabled>—</option>
-                    <option value="taxi">Táxi</option>
-                    <option value="uber">Uber / aplicativo</option>
+                    {MODALITIES.map((m) => (
+                      <option key={m} value={m}>{MODALITY_LABEL[m]}</option>
+                    ))}
                   </Select>
                 </Field>
                 <Field label="Motorista" htmlFor="driverGender">
