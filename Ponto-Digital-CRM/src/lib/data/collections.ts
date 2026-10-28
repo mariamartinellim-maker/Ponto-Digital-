@@ -10,6 +10,7 @@ import type {
   ProductionOrder,
   Receipt,
   Sale,
+  VideoOrder,
 } from "./types";
 
 /**
@@ -27,6 +28,7 @@ export interface Collections {
   productionOrders: ProductionOrder;
   guardianEvents: GuardianEvent;
   aiSuggestions: AiSuggestionRecord;
+  videoOrders: VideoOrder;
 }
 export type CollectionName = keyof Collections;
 
@@ -38,6 +40,7 @@ const TABLE: Record<CollectionName, string> = {
   productionOrders: "production_orders",
   guardianEvents: "guardian_events",
   aiSuggestions: "ai_suggestions",
+  videoOrders: "video_orders",
 };
 
 export const toSnake = (k: string) => k.replace(/[A-Z]/g, (c) => "_" + c.toLowerCase());
@@ -133,7 +136,7 @@ export async function deleteOne(orgId: string, coll: CollectionName, id: string,
 }
 
 /** Próximo número sequencial por organização (vendas e ordens de produção). */
-export async function nextNumber(orgId: string, coll: "sales" | "productionOrders"): Promise<number> {
+export async function nextNumber(orgId: string, coll: "sales" | "productionOrders" | "videoOrders"): Promise<number> {
   if (isSupabase()) {
     const { data, error } = await (await supabaseServer()).from(TABLE[coll]).select("number").eq("org_id", orgId).order("number", { ascending: false }).limit(1).maybeSingle();
     if (error) fail(error);

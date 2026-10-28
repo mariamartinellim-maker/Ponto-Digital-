@@ -387,6 +387,63 @@ export interface AiSuggestionRecord {
   createdAt: string;
 }
 
+/**
+ * Pedido de vídeo com avatar (táxi/Uber): foto do cliente → avatar → vídeo → prévia com marca d'água →
+ * comprovante → vídeo limpo. Cada etapa paga (avatar e vídeo) só roda com a automação ligada e dentro do limite do mês.
+ */
+export type VideoOrderStatus =
+  | "foto_recebida"
+  | "gerando_avatar"
+  | "avatar_pronto"
+  | "avatar_enviado"
+  | "gerando_video"
+  | "video_pronto"
+  | "aguardando_pagamento"
+  | "pago"
+  | "entregue"
+  | "falhou"
+  | "cancelado";
+export type VideoModality = "uber" | "taxi";
+export interface VideoOrder {
+  id: string;
+  orgId: string;
+  number: number;
+  clientId: string;
+  conversationId: string | null;
+  modality: VideoModality;
+  /** Nome da "empresa" no vídeo: nome e modalidade do motorista (ex.: "Benner Táxi", "Motorista RJ"). */
+  driverName: string;
+  /** Define "o motorista"/"a motorista" no prompt e a voz do vídeo. */
+  driverGender: "masculino" | "feminino";
+  /** Cidade do cliente: paisagem nas janelas. */
+  city: string;
+  /** Fala do avatar no vídeo. */
+  speech: string;
+  /** WhatsApp que aparece no vídeo para os passageiros chamarem o motorista. */
+  contactPhone: string;
+  /** Ajustes pedidos pelo cliente (refazer avatar ou vídeo). */
+  adjustments: string;
+  status: VideoOrderStatus;
+  photoAssetId: string;
+  avatarAssetId: string | null;
+  videoAssetId: string | null;
+  previewAssetId: string | null;
+  receiptAssetId: string | null;
+  /** Quantas vezes cada etapa paga rodou (controle de gasto). */
+  avatarRuns: number;
+  videoRuns: number;
+  /** "simulador" = sem chave (teste gratuito, sem IA); "ia" = OpenAI + Veo. */
+  engine: "simulador" | "ia";
+  error: string | null;
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+  avatarSentAt: string | null;
+  previewSentAt: string | null;
+  paidAt: string | null;
+  deliveredAt: string | null;
+}
+
 export interface Database {
   version: number;
   organizations: Organization[];
@@ -413,7 +470,8 @@ export interface Database {
   guardianEvents: GuardianEvent[];
   aiKnowledge: AiKnowledgeRecord[];
   aiSuggestions: AiSuggestionRecord[];
+  videoOrders: VideoOrder[];
 }
 
 /** Coleções acrescentadas depois da versão 1 da base demo (criadas vazias em bases antigas). */
-export const LATER_COLLECTIONS = ["mediaAssets", "receipts", "sales", "financeEntries", "productionOrders", "guardianEvents", "aiKnowledge", "aiSuggestions"] as const;
+export const LATER_COLLECTIONS = ["mediaAssets", "receipts", "sales", "financeEntries", "productionOrders", "guardianEvents", "aiKnowledge", "aiSuggestions", "videoOrders"] as const;

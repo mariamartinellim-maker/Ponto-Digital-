@@ -72,6 +72,24 @@ const schema = z.object({
   AI_MODEL: z.string().regex(/^claude-[a-z0-9-]+$/, "AI_MODEL inválido.").default("claude-opus-5-5"),
   AI_ESFORCO: z.enum(["low", "medium", "high"]).default("low"),
   AI_LIMITE_MENSAL: z.coerce.number().int().min(0).max(100000).default(1000),
+
+  // Vídeos com avatar (táxi/Uber). DESLIGADO por padrão. Com "true" e sem as chaves, roda o simulador
+  // gratuito (sem IA: o "avatar" é a própria foto e o "vídeo" é a foto animada pelo FFmpeg).
+  VIDEO_AUTOMACAO: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((v) => v === "true"),
+  // Chaves das APIs pagas: criadas pelo dono da conta e guardadas SÓ nas variáveis do Render.
+  OPENAI_API_KEY: z.string().optional(),
+  OPENAI_IMAGE_MODEL: z.string().regex(/^[a-z0-9.-]+$/, "OPENAI_IMAGE_MODEL inválido.").default("gpt-image-1"),
+  GOOGLE_AI_API_KEY: z.string().optional(),
+  VIDEO_VEO_MODELO: z.string().regex(/^veo-[a-z0-9.-]+$/, "VIDEO_VEO_MODELO inválido.").default("veo-3.1-fast-generate-preview"),
+  // Teto de gasto: quantas gerações pagas (avatar + vídeo) por mês. 0 bloqueia tudo.
+  VIDEO_LIMITE_MES: z.coerce.number().int().min(0).max(1000).default(20),
+  // Quantas vezes o mesmo pedido pode refazer avatar ou vídeo (ajustes do cliente).
+  VIDEO_MAX_REFACOES: z.coerce.number().int().min(1).max(10).default(3),
+  // Caminho do FFmpeg (opcional): sem ele, usa o binário do pacote ffmpeg-static.
+  FFMPEG_PATH: z.string().optional(),
 });
 
 export type Env = z.infer<typeof schema>;
@@ -163,6 +181,12 @@ export function integrationStatus() {
     supabaseConfigured: Boolean(e.SUPABASE_URL && e.SUPABASE_PUBLISHABLE_KEY),
     hasSupabaseSecret: Boolean(e.SUPABASE_SECRET_KEY),
     ai: { configured: Boolean(e.ANTHROPIC_API_KEY), model: e.AI_MODEL, monthlyLimit: e.AI_LIMITE_MENSAL },
+    video: {
+      enabled: e.VIDEO_AUTOMACAO,
+      hasOpenAi: Boolean(e.OPENAI_API_KEY),
+      hasGoogle: Boolean(e.GOOGLE_AI_API_KEY),
+      monthlyLimit: e.VIDEO_LIMITE_MES,
+    },
     whatsapp: {
       sendMode: e.WHATSAPP_SEND_MODE,
       environment: e.WHATSAPP_AMBIENTE,
