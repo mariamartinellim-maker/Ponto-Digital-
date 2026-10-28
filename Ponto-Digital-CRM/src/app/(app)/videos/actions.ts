@@ -3,6 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { authorize } from "@/lib/auth/session";
+import { getOne } from "@/lib/data/collections";
+import { audit } from "@/lib/data/repo";
+import { saveSettings, setConversationStage } from "@/lib/video/autopilot";
 import { cancelOrder, confirmPayment, createVideoOrder, sendStep, startGeneration } from "@/lib/video/service";
 
 export type VideoState = { error?: string; ok?: number | string } | undefined;
@@ -59,4 +62,50 @@ export async function videoStepAction(_: VideoState, formData: FormData): Promis
   }
   revalidatePath("/videos");
   return { ok: msg };
+}
+
+const settingsSchema = z.object({
+  enabled: z.boolean(),
+  trigger: z.enum(["anuncio", "contato_novo"]),
+  testOnly: z.boolean(),
+  priceText: z.string().trim().max(300),
+  pixKey: z.string().trim().max(120),
+  audioAskAssetId: z.string().uuid().nullable(),
+  audioPhotoAssetId: z.string().uuid().nullable(),
+});
+
+/** Configuração do atendimento automático (admin e gestor). */
+export async function saveAutopilotAction(_: VideoState, formData: FormData): Promise<VideoState> {
+  const user = await authorize("videos:manage");
+  if (user.role === "atendente") return { error: "Só administradores e gestores configuram o atendimento automático." };
+  const audio = (k: string) => String(formData.get(k) ?? "") || null;
+  const parsed = settingsSchema.safeParse({
+    enabled: formData.get("enabled") === "on",
+    trigger: String(formData.get("trigger") ?? "anuncio"),
+    testOnly: formData.get("testOnly") === "on",
+    priceText: String(formData.get("priceText") ?? ""),
+    pixKey: String(formData.get("pixKey") ?? ""),
+    audioAskAssetId: audio("audioAskAssetId"),
+    audioPhotoAssetId: audio("audioPhotoAssetId"),
+  });
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
+  const s = parsed.data;
+  if (s.enabled && (!s.priceText || !s.pixKey)) return { error: "Para ligar, informe o valor e a chave Pix (vão na mensagem de pagamento)." };
+  for (const id of [s.audioAskAssetId, s.audioPhotoAssetId]) {
+    if (id && (await getOne(user.orgId, "mediaAssets", id))?.type !== "audio") return { error: "Escolha um áudio da biblioteca." };
+  }
+  await saveSettings(user.orgId, user.id, s);
+  await audit({ orgId: user.orgId, userId: user.id, action: "video.robo_configurado", entity: "video", entityId: null, details: `${s.enabled ? "ligado" : "desligado"} · ${s.testOnly ? "só números de teste" : "todos os clientes"} · gatilho ${s.trigger}` });
+  revalidatePath("/videos");
+  return { ok: s.enabled ? "Atendimento automático LIGADO." : "Configuração salva (atendimento automático desligado)." };
+}
+
+export async function autopilotConversationAction(formData: FormData) {
+  const user = await authorize("videos:manage");
+  const action = String(formData.get("action"));
+  if (action !== "pausar" && action !== "reiniciar") throw new Error("Ação inválida.");
+  if (action === "reiniciar" && user.role === "atendente") throw new Error("Só administradores e gestores reiniciam o robô.");
+  if (!(await setConversationStage(user.orgId, String(formData.get("id")), action))) throw new Error("Conversa não encontrada.");
+  await audit({ orgId: user.orgId, userId: user.id, action: `video.robo_${action}`, entity: "conversa", entityId: null, details: "" });
+  revalidatePath("/videos");
 }

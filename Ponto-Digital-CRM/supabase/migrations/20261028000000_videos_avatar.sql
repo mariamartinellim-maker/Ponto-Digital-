@@ -49,6 +49,8 @@ create table if not exists public.video_orders (
   avatar_runs integer not null default 0 check (avatar_runs between 0 and 20),
   video_runs integer not null default 0 check (video_runs between 0 and 20),
   engine text not null default 'simulador' check (engine in ('simulador', 'ia')),
+  -- Pedido conduzido pelo atendimento automático (envia avatar e prévia sozinho ao ficarem prontos).
+  autopilot boolean not null default false,
   error text check (length(error) <= 500),
   created_by uuid,
   created_at timestamptz not null default now(),
@@ -67,7 +69,7 @@ alter table public.video_orders enable row level security;
 revoke all on public.video_orders from public, anon, authenticated;
 grant select on public.video_orders to authenticated;
 grant insert (id, org_id, number, client_id, conversation_id, modality, driver_name, driver_gender, city, speech, contact_phone, adjustments, status,
-  photo_asset_id, engine, created_by, created_at, updated_at) on public.video_orders to authenticated;
+  photo_asset_id, engine, autopilot, created_by, created_at, updated_at) on public.video_orders to authenticated;
 -- As etapas pagas (avatar e vídeo) e os arquivos gerados são gravados só pelo servidor (service_role).
 grant update (adjustments, status, avatar_sent_at, preview_sent_at, paid_at, delivered_at, receipt_asset_id, error, updated_at) on public.video_orders to authenticated;
 grant select, insert, update, delete on public.video_orders to service_role;
@@ -89,5 +91,62 @@ begin
       with check (org_id = app.current_org() and (status <> 'cancelado' or app.has_role('admin', 'gestor')))$p$;
   end if;
 end $pol$;
+
+-- ---------------------------------------------------------------------------
+-- Atendimento automático dos vídeos (robô): configuração por organização e andamento por conversa.
+-- Gravados só pelo servidor (service_role); a equipe lê e o admin/gestor configura pelo CRM.
+-- ---------------------------------------------------------------------------
+create table if not exists public.video_autopilot_settings (
+  id uuid primary key default gen_random_uuid(),
+  org_id uuid not null unique references public.organizations (id) on delete cascade,
+  enabled boolean not null default false,
+  trigger text not null default 'anuncio' check (trigger in ('anuncio', 'contato_novo')),
+  test_only boolean not null default true,
+  price_text text not null default '' check (length(price_text) <= 300),
+  pix_key text not null default '' check (length(pix_key) <= 120),
+  audio_ask_asset_id uuid,
+  audio_photo_asset_id uuid,
+  updated_by uuid,
+  updated_at timestamptz not null default now()
+);
+alter table public.video_autopilot_settings enable row level security;
+revoke all on public.video_autopilot_settings from public, anon, authenticated;
+grant select on public.video_autopilot_settings to authenticated;
+grant select, insert, update, delete on public.video_autopilot_settings to service_role;
+
+create table if not exists public.video_autopilot_states (
+  id uuid primary key default gen_random_uuid(),
+  org_id uuid not null references public.organizations (id) on delete cascade,
+  conversation_id uuid not null,
+  client_id uuid not null,
+  stage text not null check (stage in ('perguntou_modalidade', 'pediu_foto', 'roteiro', 'avatar', 'video', 'finalizado', 'humano')),
+  modality text check (modality in ('uber', 'taxi')),
+  info text not null default '' check (length(info) <= 3000),
+  photo_asset_id uuid,
+  -- Roteiro (fala, nome no vídeo, cidade…) enviado ao cliente para aprovar antes do avatar.
+  draft jsonb,
+  order_id uuid,
+  retries integer not null default 0 check (retries between 0 and 20),
+  note text not null default '' check (length(note) <= 300),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (org_id, conversation_id),
+  foreign key (org_id, conversation_id) references public.conversations (org_id, id) on delete cascade
+);
+create index if not exists video_autopilot_states_org_idx on public.video_autopilot_states (org_id, updated_at desc);
+alter table public.video_autopilot_states enable row level security;
+revoke all on public.video_autopilot_states from public, anon, authenticated;
+grant select on public.video_autopilot_states to authenticated;
+grant select, insert, update, delete on public.video_autopilot_states to service_role;
+
+do $pol2$
+begin
+  if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'video_autopilot_settings' and policyname = 'autopilot_settings_select') then
+    execute $p$create policy autopilot_settings_select on public.video_autopilot_settings for select to authenticated using (org_id = app.current_org())$p$;
+  end if;
+  if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'video_autopilot_states' and policyname = 'autopilot_states_select') then
+    execute $p$create policy autopilot_states_select on public.video_autopilot_states for select to authenticated using (org_id = app.current_org())$p$;
+  end if;
+end $pol2$;
 
 commit;

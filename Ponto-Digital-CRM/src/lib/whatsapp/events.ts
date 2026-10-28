@@ -25,7 +25,7 @@ export interface WaMedia {
 }
 
 export type WaEvent =
-  | { kind: "inbound"; waMessageId: string; from: string; profileName: string | null; text: string; timestamp: number; media: WaMedia | null }
+  | { kind: "inbound"; waMessageId: string; from: string; profileName: string | null; text: string; timestamp: number; media: WaMedia | null; fromAd?: boolean }
   | { kind: "status"; waMessageId: string; status: "sent" | "delivered" | "read" | "failed"; recipient: string; timestamp: number; error: string | null }
   | { kind: "echo"; waMessageId: string; to: string; text: string; timestamp: number; media: WaMedia | null }
   | { kind: "history"; waMessageId: string; contact: string; direction: "in" | "out"; text: string; timestamp: number; media: WaMedia | null }
@@ -125,6 +125,8 @@ export function parseWebhook(payload: unknown): WaEnvelope[] {
             text: messageText(m).slice(0, 4096),
             timestamp: Number(m.timestamp) || 0,
             media: messageMedia(m),
+            // Clique em anúncio do Facebook/Instagram que leva ao WhatsApp ("referral" na primeira mensagem).
+            ...(isObj(m.referral) ? { fromAd: true } : {}),
           });
         }
         for (const s of arr(v.statuses)) {

@@ -8,8 +8,9 @@ import { scoped } from "@/lib/data/repo";
 import type { VideoOrder } from "@/lib/data/types";
 import { formatDateTime } from "@/lib/format";
 import { allowedActions, MAX_SPEECH_WORDS, MODALITY_LABEL, VIDEO_COLUMNS, VIDEO_STATUS } from "@/lib/video/rules";
+import { getSettings, listStates, modalityLabel, STAGE_LABEL } from "@/lib/video/autopilot";
 import { videoUsage, withStuck } from "@/lib/video/service";
-import { createVideoAction } from "./actions";
+import { autopilotConversationAction, createVideoAction, saveAutopilotAction } from "./actions";
 import { AutoRefresh, OrderActions } from "./order-actions";
 
 export const metadata = { title: "Vídeos com avatar" };
@@ -19,7 +20,15 @@ const file = (id: string | null) => (id ? `/api/biblioteca/${id}` : null);
 
 export default async function VideosPage() {
   const user = await requireUser("videos:manage");
-  const [raw, d, usage] = await Promise.all([listAll(user.orgId, "videoOrders", { order: "updatedAt", desc: true }), scoped(user.orgId), videoUsage(user.orgId)]);
+  const [raw, d, usage, settings, states, audios] = await Promise.all([
+    listAll(user.orgId, "videoOrders", { order: "updatedAt", desc: true }),
+    scoped(user.orgId),
+    videoUsage(user.orgId),
+    getSettings(user.orgId),
+    listStates(user.orgId),
+    listAll(user.orgId, "mediaAssets", { where: { type: "audio" }, order: "createdAt", desc: true, limit: 100 }),
+  ]);
+  const canConfigure = user.role !== "atendente";
   const orders = raw.map(withStuck);
   const clients = new Map(d.clients.map((c) => [c.id, c.name]));
   const generating = orders.some((o) => o.status === "gerando_avatar" || o.status === "gerando_video");
@@ -110,6 +119,75 @@ export default async function VideosPage() {
         })}
       </div>
       <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-[1fr_400px]">
+        <Card>
+          <CardHeader
+            title="Atendimento automático"
+            description={settings?.enabled ? (settings.testOnly ? "LIGADO só para os números de teste." : "LIGADO para clientes.") : "Desligado."}
+          />
+          {states.length === 0 ? (
+            <p className="px-5 py-6 text-sm text-slate-500">Nenhuma conversa atendida pelo robô ainda.</p>
+          ) : (
+            <ul className="divide-y divide-line">
+              {states.map((st) => (
+                <li key={st.id} className="flex flex-wrap items-center gap-3 px-5 py-3 text-sm">
+                  <Link href={`/inbox/${st.conversationId}`} className="flex-1 truncate font-medium hover:text-brand-700">{clients.get(st.clientId) ?? "Cliente"}</Link>
+                  <span className="text-xs text-slate-500">{modalityLabel(st.modality)}</span>
+                  <Badge tone={st.stage === "humano" ? "amber" : st.stage === "finalizado" ? "green" : "sky"}>{STAGE_LABEL[st.stage]}</Badge>
+                  {st.note && <span className="w-full text-xs text-slate-500">{st.note}</span>}
+                  <span className="text-xs text-slate-400">{formatDateTime(st.updatedAt)}</span>
+                  <form action={autopilotConversationAction} className="flex gap-1.5">
+                    <input type="hidden" name="id" value={st.id} />
+                    {st.stage !== "humano" && st.stage !== "finalizado" && (
+                      <button name="action" value="pausar" className="rounded-lg border border-line px-2 py-1 text-xs font-medium hover:bg-slate-50">Assumir (pausar robô)</button>
+                    )}
+                    {canConfigure && (
+                      <button name="action" value="reiniciar" className="rounded-lg border border-line px-2 py-1 text-xs font-medium hover:bg-slate-50">Reiniciar</button>
+                    )}
+                  </form>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+        {canConfigure && (
+          <Card className="xl:self-start">
+            <CardHeader title="Configurar o robô" description="Atende sozinho quem chega pelo anúncio, por escrito ou com os áudios gravados." />
+            <div className="p-5">
+              <ActionForm action={saveAutopilotAction} submitLabel="Salvar" success="Salvo." className="space-y-4">
+                <label className="flex items-center gap-2 text-sm font-medium">
+                  <input type="checkbox" name="enabled" defaultChecked={settings?.enabled ?? false} className="size-4" /> Ligar atendimento automático
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" name="testOnly" defaultChecked={settings?.testOnly ?? true} className="size-4" /> Só números de teste (desmarque para atender clientes)
+                </label>
+                <Field label="Quando começar" htmlFor="trigger">
+                  <Select id="trigger" name="trigger" defaultValue={settings?.trigger ?? "anuncio"}>
+                    <option value="anuncio">Contato novo vindo de anúncio</option>
+                    <option value="contato_novo">Qualquer contato novo</option>
+                  </Select>
+                </Field>
+                <Field label="Valor do vídeo" htmlFor="priceText" hint='Como aparece na mensagem, ex.: "R$ 50"'>
+                  <Input id="priceText" name="priceText" maxLength={300} defaultValue={settings?.priceText ?? ""} />
+                </Field>
+                <Field label="Chave Pix" htmlFor="pixKey">
+                  <Input id="pixKey" name="pixKey" maxLength={120} defaultValue={settings?.pixKey ?? ""} />
+                </Field>
+                <Field label='Áudio "Uber ou táxi?"' htmlFor="audioAskAssetId" hint="Da biblioteca de mídias. Sem áudio, vai por escrito.">
+                  <Select id="audioAskAssetId" name="audioAskAssetId" defaultValue={settings?.audioAskAssetId ?? ""}>
+                    <option value="">Por escrito</option>
+                    {audios.map((a) => <option key={a.id} value={a.id}>{a.title}</option>)}
+                  </Select>
+                </Field>
+                <Field label='Áudio "foto e informações"' htmlFor="audioPhotoAssetId">
+                  <Select id="audioPhotoAssetId" name="audioPhotoAssetId" defaultValue={settings?.audioPhotoAssetId ?? ""}>
+                    <option value="">Por escrito</option>
+                    {audios.map((a) => <option key={a.id} value={a.id}>{a.title}</option>)}
+                  </Select>
+                </Field>
+              </ActionForm>
+            </div>
+          </Card>
+        )}
         <Card>
           <CardHeader title="Entregues e cancelados" />
           {finished.length === 0 ? (

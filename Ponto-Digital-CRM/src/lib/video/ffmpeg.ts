@@ -34,7 +34,7 @@ export function ffmpegPath(): string {
 
 function run(args: string[], timeoutMs = 180_000): Promise<void> {
   return new Promise((resolve, reject) => {
-    execFile(ffmpegPath(), ["-hide_banner", "-loglevel", "error", "-y", ...args], { timeout: timeoutMs, maxBuffer: 4 * 1024 * 1024 }, (err, _out, stderr) => {
+    execFile(/*turbopackIgnore: true*/ ffmpegPath(), ["-hide_banner", "-loglevel", "error", "-y", ...args], { timeout: timeoutMs, maxBuffer: 4 * 1024 * 1024 }, (err, _out, stderr) => {
       if (err) reject(new Error(`FFmpeg falhou: ${String(stderr || err.message).trim().slice(-300)}`));
       else resolve();
     });
@@ -67,7 +67,7 @@ export async function applyWatermark(video: Uint8Array): Promise<Buffer> {
 const hasAudio = async (file: string) =>
   new Promise<boolean>((resolve) => {
     // "-map 0:a:0 -f null" falha quando não existe faixa de áudio.
-    execFile(ffmpegPath(), ["-hide_banner", "-loglevel", "error", "-i", file, "-map", "0:a:0", "-t", "0.1", "-f", "null", "-"], { timeout: 30_000 }, (err) => resolve(!err));
+    execFile(/*turbopackIgnore: true*/ ffmpegPath(), ["-hide_banner", "-loglevel", "error", "-i", file, "-map", "0:a:0", "-t", "0.1", "-f", "null", "-"], { timeout: 30_000 }, (err) => resolve(!err));
   });
 
 /**
@@ -140,6 +140,17 @@ export async function toJpeg(image: Uint8Array, mime: string): Promise<Buffer> {
     const out = path.join(dir, "avatar.jpg");
     await writeFile(input, image);
     await run(["-i", input, "-vf", "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1", "-frames:v", "1", "-q:v", "3", out], 60_000);
+    return readFile(out);
+  });
+}
+
+/** Áudio gravado → mensagem de voz do WhatsApp (OGG/Opus, mono). */
+export async function toVoiceNote(audio: Uint8Array): Promise<Buffer> {
+  return withTmp(async (dir) => {
+    const input = path.join(dir, "in.audio");
+    const out = path.join(dir, "voz.ogg");
+    await writeFile(input, audio);
+    await run(["-i", input, "-vn", "-ac", "1", "-ar", "48000", "-c:a", "libopus", "-b:a", "32k", "-application", "voip", out], 60_000);
     return readFile(out);
   });
 }

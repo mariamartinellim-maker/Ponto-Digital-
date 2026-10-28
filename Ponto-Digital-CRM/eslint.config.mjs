@@ -18,6 +18,9 @@ const eslintConfig = defineConfig([
       "src/lib/data/collections.ts",
       "src/lib/media/storage.ts",
       "src/lib/guardian/guardian.ts",
+      // Robô dos vídeos: envia e acompanha conversas sem usuário logado.
+      "src/lib/video/outbox.ts",
+      "src/lib/video/autopilot.ts",
       "src/app/api/webhooks/whatsapp/route.ts",
       "src/app/(app)/configuracoes/whatsapp/**",
       "src/app/(app)/equipe/actions.ts",

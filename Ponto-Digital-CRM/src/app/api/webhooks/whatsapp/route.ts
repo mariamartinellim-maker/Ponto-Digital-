@@ -1,13 +1,14 @@
 import { timingSafeEqual } from "node:crypto";
-import { connection, NextResponse, type NextRequest } from "next/server";
+import { after, connection, NextResponse, type NextRequest } from "next/server";
 import { applyWhatsAppEvents } from "@/lib/data/repo";
 import { getDb } from "@/lib/data/store";
 import { env } from "@/lib/env";
 import { hasSupabaseAdmin } from "@/lib/supabase/admin";
 import { isSupabase } from "@/lib/supabase/server";
 import { rateLimit } from "@/lib/rate-limit";
+import { runAutopilot } from "@/lib/video/autopilot";
 import { parseWebhook } from "@/lib/whatsapp/events";
-import { ingestSupabase } from "@/lib/whatsapp/ingest";
+import { ingestSupabase, orgResolver } from "@/lib/whatsapp/ingest";
 import { verifyMetaSignature } from "@/lib/whatsapp/signature";
 
 const MAX_BODY = 1024 * 1024; // 1 MB
@@ -65,6 +66,8 @@ export async function POST(req: NextRequest) {
   if (isSupabase()) {
     try {
       const stats = await ingestSupabase(envelopes);
+      // Atendimento automático dos vídeos: roda depois da resposta (a Meta não espera pelo robô).
+      after(async () => runAutopilot(envelopes, await orgResolver()));
       return NextResponse.json({ received: true, ...stats });
     } catch {
       return new NextResponse("Erro ao processar", { status: 500 });
@@ -76,5 +79,6 @@ export async function POST(req: NextRequest) {
   const db = await getDb();
   const orgId = db.organizations[0]!.id;
   const stats = await applyWhatsAppEvents(orgId, accepted);
+  after(() => runAutopilot(accepted, () => orgId));
   return NextResponse.json({ received: true, ...stats });
 }

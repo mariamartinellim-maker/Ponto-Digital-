@@ -3,14 +3,11 @@ import { randomUUID } from "node:crypto";
 import type { SessionUser } from "../auth/session";
 import { getOne, insertOne, listAll, nextNumber, updateOne, type Access } from "../data/collections";
 import { audit, scoped } from "../data/repo";
-import type { MediaAsset, MessageMedia, VideoModality, VideoOrder, VideoOrderStatus } from "../data/types";
+import type { MediaAsset, VideoModality, VideoOrder, VideoOrderStatus } from "../data/types";
 import { env } from "../env";
-import { windowOpen } from "../inbox";
-import { loadTarget, recordOutgoing } from "../inbox-send";
 import { getFile, saveAsset } from "../media/storage";
-import { sendDecision, sendWhatsApp, waCredentials } from "../whatsapp/client";
-import { GraphError, uploadMedia } from "../whatsapp/graph";
 import { applyWatermark, finishVideo, photoToVideo, toJpeg } from "./ffmpeg";
+import { sendToConversation } from "./outbox";
 import { generateAvatar, generateVideo, ProviderError, providersConfigured } from "./providers";
 import { avatarPrompt, animationPrompt, canDo, endCardLines, isStuck, monthStartCuiaba, paidRunsLeft, validateOrderInput, type VideoAction } from "./rules";
 
@@ -29,6 +26,12 @@ const fail = (error: string): { ok: false; error: string } => ({ ok: false, erro
 const nowIso = () => new Date().toISOString();
 // Arquivos e etapas pagas são gravados pela chave do servidor, depois da checagem de permissão feita aqui.
 const SERVER: Access = { admin: true };
+
+/** Quem age: uma pessoa logada (botões da tela) ou o próprio sistema (atendimento automático). */
+export type Actor = SessionUser | { system: true; orgId: string };
+export const SYSTEM = (orgId: string): Actor => ({ system: true, orgId });
+const userOf = (a: Actor): SessionUser | null => ("system" in a ? null : a);
+const accessOf = (a: Actor): Access | undefined => ("system" in a ? SERVER : undefined);
 
 export function videoEngine(): VideoOrder["engine"] {
   const p = providersConfigured();
@@ -53,8 +56,8 @@ export function withStuck(o: VideoOrder): VideoOrder {
   return isStuck(o) ? { ...o, status: "falhou", error: o.error ?? "A geração foi interrompida (o servidor reiniciou). Tente de novo." } : o;
 }
 
-async function loadOrder(user: SessionUser, id: string) {
-  const o = await getOne(user.orgId, "videoOrders", id);
+async function loadOrder(a: Actor, id: string) {
+  const o = await getOne(a.orgId, "videoOrders", id, accessOf(a));
   return o ? withStuck(o) : null;
 }
 
@@ -65,9 +68,72 @@ async function setStatus(orgId: string, id: string, status: VideoOrderStatus, pa
 // ---------------------------------------------------------------------------
 // Criação
 // ---------------------------------------------------------------------------
+export interface OrderInput {
+  modality: string;
+  driverGender: string;
+  driverName: string;
+  city: string;
+  speech: string;
+  contactPhone: string;
+}
+
+/** Cria o pedido com a foto já salva na biblioteca (usado pela tela e pelo atendimento automático). */
+export async function createOrderCore(
+  a: Actor,
+  client: { id: string; name: string; phone: string; city: string },
+  conversationId: string | null,
+  input: OrderInput,
+  photoAssetId: string,
+  autopilot = false,
+): Promise<Result<VideoOrder>> {
+  const err = validateOrderInput(input);
+  if (err) return fail(err);
+  const user = userOf(a);
+  const order: VideoOrder = {
+    id: randomUUID(),
+    orgId: a.orgId,
+    number: await nextNumber(a.orgId, "videoOrders", accessOf(a)),
+    clientId: client.id,
+    conversationId,
+    modality: input.modality as VideoModality,
+    driverName: input.driverName.trim().slice(0, 80),
+    driverGender: input.driverGender === "feminino" ? "feminino" : "masculino",
+    city: (input.city.trim() || client.city).slice(0, 80),
+    speech: input.speech.trim().slice(0, 400),
+    // O cliente é o próprio motorista: sem número informado, o vídeo mostra o WhatsApp dele.
+    contactPhone: (input.contactPhone.trim() || client.phone).slice(0, 30),
+    adjustments: "",
+    status: "foto_recebida",
+    photoAssetId,
+    avatarAssetId: null,
+    videoAssetId: null,
+    previewAssetId: null,
+    receiptAssetId: null,
+    avatarRuns: 0,
+    videoRuns: 0,
+    engine: videoEngine(),
+    autopilot,
+    error: null,
+    createdBy: user?.id ?? null,
+    createdAt: nowIso(),
+    updatedAt: nowIso(),
+    avatarSentAt: null,
+    previewSentAt: null,
+    paidAt: null,
+    deliveredAt: null,
+  };
+  try {
+    const saved = await insertOne("videoOrders", order, SERVER);
+    await audit({ orgId: a.orgId, userId: user?.id ?? null, action: "video.pedido_criado", entity: "video", entityId: saved.id, details: `nº ${saved.number} · ${client.name}${autopilot ? " · automático" : ""}` });
+    return { ok: true, value: saved };
+  } catch (e) {
+    return fail((e as Error).message);
+  }
+}
+
 export async function createVideoOrder(
   user: SessionUser,
-  input: { clientId: string; conversationId?: string | null; modality: string; driverGender: string; driverName: string; city: string; speech: string; contactPhone: string; photo: { bytes: Uint8Array; mime: string; filename: string } },
+  input: OrderInput & { clientId: string; conversationId?: string | null; photo: { bytes: Uint8Array; mime: string; filename: string } },
 ): Promise<Result<VideoOrder>> {
   const err = validateOrderInput(input);
   if (err) return fail(err);
@@ -81,45 +147,7 @@ export async function createVideoOrder(
     SERVER,
   );
   if ("error" in photo) return fail(photo.error);
-  const order: VideoOrder = {
-    id: randomUUID(),
-    orgId: user.orgId,
-    number: await nextNumber(user.orgId, "videoOrders"),
-    clientId: client.id,
-    conversationId: conv?.id ?? null,
-    modality: input.modality as VideoModality,
-    driverName: input.driverName.trim().slice(0, 80),
-    driverGender: input.driverGender === "feminino" ? "feminino" : "masculino",
-    city: (input.city.trim() || client.city).slice(0, 80),
-    speech: input.speech.trim().slice(0, 400),
-    // O cliente é o próprio motorista: sem número informado, o vídeo mostra o WhatsApp dele.
-    contactPhone: (input.contactPhone.trim() || client.phone).slice(0, 30),
-    adjustments: "",
-    status: "foto_recebida",
-    photoAssetId: photo.id,
-    avatarAssetId: null,
-    videoAssetId: null,
-    previewAssetId: null,
-    receiptAssetId: null,
-    avatarRuns: 0,
-    videoRuns: 0,
-    engine: videoEngine(),
-    error: null,
-    createdBy: user.id,
-    createdAt: nowIso(),
-    updatedAt: nowIso(),
-    avatarSentAt: null,
-    previewSentAt: null,
-    paidAt: null,
-    deliveredAt: null,
-  };
-  try {
-    const saved = await insertOne("videoOrders", order, SERVER);
-    await audit({ orgId: user.orgId, userId: user.id, action: "video.pedido_criado", entity: "video", entityId: saved.id, details: `nº ${saved.number} · ${client.name}` });
-    return { ok: true, value: saved };
-  } catch (e) {
-    return fail((e as Error).message);
-  }
+  return createOrderCore(user, client, conv?.id ?? null, input, photo.id);
 }
 
 // ---------------------------------------------------------------------------
@@ -146,7 +174,8 @@ async function avatarJob(o: VideoOrder) {
     const raw = o.engine === "ia" ? await generateAvatar(bytes, asset.mime, avatarPrompt(o)) : { bytes, mime: asset.mime };
     const jpg = await toJpeg(raw.bytes, raw.mime);
     const saved = await store(o, jpg, "image/jpeg", `avatar-${o.number}-${o.avatarRuns}.jpg`, `Avatar nº ${o.number}`, "avatar");
-    await setStatus(o.orgId, o.id, "avatar_pronto", { avatarAssetId: saved.id, error: null });
+    const ready = await setStatus(o.orgId, o.id, "avatar_pronto", { avatarAssetId: saved.id, error: null });
+    if (ready?.autopilot) await (await import("./autopilot")).onAvatarReady(ready);
   } catch (e) {
     console.error("[video] avatar", o.id, (e as Error).message);
     await setStatus(o.orgId, o.id, "falhou", { error: friendly(e) }).catch(() => {});
@@ -161,7 +190,8 @@ async function videoJob(o: VideoOrder) {
     const preview = await applyWatermark(clean);
     const v = await store(o, clean, "video/mp4", `video-${o.number}-${o.videoRuns}.mp4`, `Vídeo nº ${o.number} (sem marca)`, "final");
     const p = await store(o, preview, "video/mp4", `previa-${o.number}-${o.videoRuns}.mp4`, `Prévia nº ${o.number} (com marca d'água)`, "previa");
-    await setStatus(o.orgId, o.id, "video_pronto", { videoAssetId: v.id, previewAssetId: p.id, error: null });
+    const ready = await setStatus(o.orgId, o.id, "video_pronto", { videoAssetId: v.id, previewAssetId: p.id, error: null });
+    if (ready?.autopilot) await (await import("./autopilot")).onVideoReady(ready);
   } catch (e) {
     console.error("[video] vídeo", o.id, (e as Error).message);
     await setStatus(o.orgId, o.id, "falhou", { error: friendly(e) }).catch(() => {});
@@ -171,8 +201,8 @@ async function videoJob(o: VideoOrder) {
 const RUN_FIELD = { gerar_avatar: "avatarRuns", gerar_video: "videoRuns" } as const;
 
 /** Gera (ou refaz, com ajustes) o avatar ou o vídeo. Volta na hora; a geração segue em segundo plano. */
-export async function startGeneration(user: SessionUser, id: string, action: "gerar_avatar" | "gerar_video", adjustments: string): Promise<Result<VideoOrder>> {
-  const o = await loadOrder(user, id);
+export async function startGeneration(a: Actor, id: string, action: "gerar_avatar" | "gerar_video", adjustments: string): Promise<Result<VideoOrder>> {
+  const o = await loadOrder(a, id);
   if (!o) return fail("Pedido não encontrado.");
   if (!canDo(o, action)) return fail("Esta etapa não está disponível agora.");
   const e = env();
@@ -180,10 +210,10 @@ export async function startGeneration(user: SessionUser, id: string, action: "ge
   if (o[field] >= e.VIDEO_MAX_REFACOES) return fail(`Limite de ${e.VIDEO_MAX_REFACOES} tentativas desta etapa no pedido. Crie um pedido novo se precisar.`);
   // O motor é decidido a cada geração: ligar as chaves no meio do pedido passa a usar a IA dali em diante.
   const engine = videoEngine();
-  if (engine === "ia" && (await paidRunsThisMonth(user.orgId)) >= e.VIDEO_LIMITE_MES) {
+  if (engine === "ia" && (await paidRunsThisMonth(a.orgId)) >= e.VIDEO_LIMITE_MES) {
     return fail(`Limite do mês atingido (${e.VIDEO_LIMITE_MES} gerações pagas). Aumente VIDEO_LIMITE_MES no Render se quiser continuar.`);
   }
-  const next = await setStatus(user.orgId, o.id, action === "gerar_avatar" ? "gerando_avatar" : "gerando_video", {
+  const next = await setStatus(a.orgId, o.id, action === "gerar_avatar" ? "gerando_avatar" : "gerando_video", {
     [field]: o[field] + 1,
     engine,
     error: null,
@@ -191,80 +221,48 @@ export async function startGeneration(user: SessionUser, id: string, action: "ge
   });
   if (!next) return fail("Pedido não encontrado.");
   void (action === "gerar_avatar" ? avatarJob(next) : videoJob(next));
-  await audit({ orgId: user.orgId, userId: user.id, action: `video.${action}`, entity: "video", entityId: o.id, details: `nº ${o.number} · ${engine}${adjustments ? " · com ajustes" : ""}` });
+  await audit({ orgId: a.orgId, userId: userOf(a)?.id ?? null, action: `video.${action}`, entity: "video", entityId: o.id, details: `nº ${o.number} · ${engine}${adjustments ? " · com ajustes" : ""}` });
   return { ok: true, value: next };
 }
 
 // ---------------------------------------------------------------------------
 // Envios ao cliente (sempre pelas travas do WhatsApp)
 // ---------------------------------------------------------------------------
-async function sendAssetToClient(user: SessionUser, o: VideoOrder, assetId: string | null, caption: string): Promise<Result<{ simulated: boolean }>> {
-  const convId = o.conversationId ?? (await scoped(user.orgId)).conversations.find((c) => c.clientId === o.clientId)?.id;
+async function sendAssetToClient(user: SessionUser | null, o: VideoOrder, assetId: string | null, caption: string): Promise<Result<{ simulated: boolean }>> {
+  const convId = o.conversationId ?? (user ? (await scoped(o.orgId)).conversations.find((c) => c.clientId === o.clientId)?.id : null);
   if (!convId) return fail("O cliente ainda não tem conversa no WhatsApp.");
-  let target;
-  try {
-    target = await loadTarget(user, convId);
-  } catch {
-    return fail("Conversa não encontrada.");
-  }
-  if (!windowOpen(target.conv)) return fail("Fora da janela de 24h do WhatsApp: o cliente precisa mandar uma mensagem antes.");
-  const { asset, bytes } = await assetBytes(user.orgId, assetId);
-  const type = asset.type === "image" ? "image" : "video";
-  const media: MessageMedia = { type, mime: asset.mime, filename: asset.filename, assetId: asset.id, caption };
-  const decision = sendDecision(target.phone);
-  if (decision.mode === "blocked") return fail(decision.reason);
-  let simulated = true;
-  let waMessageId: string;
-  if (decision.mode === "live") {
-    const creds = await waCredentials(user.orgId);
-    if (!creds) return fail("Credenciais da Cloud API não configuradas.");
-    try {
-      media.id = await uploadMedia(creds.phoneNumberId, creds.token, new Blob([new Uint8Array(bytes)], { type: asset.mime }), asset.filename);
-    } catch (err) {
-      return fail(`Falha ao enviar o arquivo à Meta: ${err instanceof GraphError ? err.message : "erro de conexão"}`);
-    }
-    const r = await sendWhatsApp({ type: "media", to: target.phone, media: type, mediaId: media.id, caption }, { orgId: user.orgId });
-    if (!r.ok) return fail(`Falha no envio: ${r.error}`);
-    simulated = r.simulated;
-    waMessageId = r.waMessageId;
-  } else {
-    waMessageId = `wamid.SIMULADO.${randomUUID()}`;
-    media.simulated = true;
-  }
-  const label = type === "image" ? "imagem" : "vídeo";
-  const err = await recordOutgoing(user, target.conv, `[${label}] ${caption}`.slice(0, 4096), simulated, waMessageId, { media });
-  if (err) return fail(err);
-  return { ok: true, value: { simulated } };
+  if (!assetId) return fail("Arquivo do pedido não encontrado.");
+  return sendToConversation(o.orgId, convId, { kind: "asset", assetId, caption }, user);
 }
 
 const CAPTIONS = {
-  enviar_avatar: "Olha como ficou o seu avatar! Se quiser algum ajuste, é só falar. Se estiver tudo certo, responda \"pode continuar\" que já animamos o vídeo.",
-  enviar_previa: "Seu vídeo ficou pronto! Esta é a prévia para aprovação. Assim que recebermos o comprovante de pagamento, enviamos o vídeo sem a marca d'água.",
-  enviar_final: "Pagamento confirmado, obrigado! Aqui está o seu vídeo final, sem marca d'água. Sucesso nas corridas!",
+  enviar_avatar: "Olha como ficou! Se quiser mudar alguma coisa é só falar. Se tiver tudo certo me responde \"pode continuar\"",
+  enviar_previa: "Prontinho, essa é a prévia pra você conferir",
+  enviar_final: "Prontinho! Aqui está o seu vídeo sem a marca d'água. Sucesso nas corridas!",
 } as const;
 
-export async function sendStep(user: SessionUser, id: string, action: "enviar_avatar" | "enviar_previa" | "enviar_final"): Promise<Result<{ simulated: boolean }>> {
-  const o = await loadOrder(user, id);
+export async function sendStep(a: Actor, id: string, action: "enviar_avatar" | "enviar_previa" | "enviar_final"): Promise<Result<{ simulated: boolean }>> {
+  const o = await loadOrder(a, id);
   if (!o) return fail("Pedido não encontrado.");
   if (!canDo(o, action)) return fail("Esta etapa não está disponível agora.");
   const assetId = action === "enviar_avatar" ? o.avatarAssetId : action === "enviar_previa" ? o.previewAssetId : o.videoAssetId;
-  const r = await sendAssetToClient(user, o, assetId, CAPTIONS[action]);
+  const r = await sendAssetToClient(userOf(a), o, assetId, CAPTIONS[action]);
   if (!r.ok) return r;
   const at = nowIso();
-  if (action === "enviar_avatar") await setStatus(user.orgId, o.id, "avatar_enviado", { avatarSentAt: at });
-  else if (action === "enviar_previa") await setStatus(user.orgId, o.id, "aguardando_pagamento", { previewSentAt: at });
-  else await setStatus(user.orgId, o.id, "entregue", { deliveredAt: at });
-  await audit({ orgId: user.orgId, userId: user.id, action: `video.${action}`, entity: "video", entityId: o.id, details: `nº ${o.number}${r.value.simulated ? " · simulado" : ""}` });
+  if (action === "enviar_avatar") await setStatus(a.orgId, o.id, "avatar_enviado", { avatarSentAt: at });
+  else if (action === "enviar_previa") await setStatus(a.orgId, o.id, "aguardando_pagamento", { previewSentAt: at });
+  else await setStatus(a.orgId, o.id, "entregue", { deliveredAt: at });
+  await audit({ orgId: a.orgId, userId: userOf(a)?.id ?? null, action: `video.${action}`, entity: "video", entityId: o.id, details: `nº ${o.number}${r.value.simulated ? " · simulado" : ""}` });
   return r;
 }
 
-/** Pagamento confirmado por uma pessoa (o reconhecimento automático do comprovante vem na fase 2). */
-export async function confirmPayment(user: SessionUser, id: string): Promise<Result<VideoOrder>> {
-  const o = await loadOrder(user, id);
+/** Pagamento confirmado: por uma pessoa (botão) ou pelo robô, ao ler um comprovante enviado pelo cliente. */
+export async function confirmPayment(a: Actor, id: string, receiptAssetId: string | null = null): Promise<Result<VideoOrder>> {
+  const o = await loadOrder(a, id);
   if (!o) return fail("Pedido não encontrado.");
   if (!canDo(o, "confirmar_pagamento")) return fail("Envie a prévia antes de confirmar o pagamento.");
-  const next = await setStatus(user.orgId, o.id, "pago", { paidAt: nowIso() });
-  await audit({ orgId: user.orgId, userId: user.id, action: "video.pagamento_confirmado", entity: "video", entityId: o.id, details: `nº ${o.number}` });
+  const next = await setStatus(a.orgId, o.id, "pago", { paidAt: nowIso(), ...(receiptAssetId ? { receiptAssetId } : {}) });
+  await audit({ orgId: a.orgId, userId: userOf(a)?.id ?? null, action: "video.pagamento_confirmado", entity: "video", entityId: o.id, details: `nº ${o.number}${receiptAssetId ? " · comprovante lido automaticamente" : ""}` });
   return next ? { ok: true, value: next } : fail("Pedido não encontrado.");
 }
 

@@ -25,7 +25,7 @@ import { cancelOrder, confirmPayment, createVideoOrder, sendStep, startGeneratio
 const order = (p: Partial<VideoOrder>): VideoOrder => ({
   id: "v1", orgId: "o", number: 1, clientId: "c", conversationId: null, modality: "taxi", driverName: "Benner Táxi", driverGender: "masculino", city: "Cuiabá",
   speech: "Precisando de táxi? Me chama!", contactPhone: "65999990000", adjustments: "", status: "foto_recebida", photoAssetId: "p", avatarAssetId: null,
-  videoAssetId: null, previewAssetId: null, receiptAssetId: null, avatarRuns: 0, videoRuns: 0, engine: "simulador", error: null, createdBy: null,
+  videoAssetId: null, previewAssetId: null, receiptAssetId: null, avatarRuns: 0, videoRuns: 0, engine: "simulador", autopilot: false, error: null, createdBy: null,
   createdAt: "2026-10-28T00:00:00.000Z", updatedAt: "2026-10-28T00:00:00.000Z", avatarSentAt: null, previewSentAt: null, paidAt: null, deliveredAt: null, ...p,
 });
 

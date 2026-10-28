@@ -403,5 +403,7 @@ export async function buildSeed(): Promise<Database> {
     aiKnowledge: [],
     aiSuggestions: [],
     videoOrders: [],
+    videoAutopilotSettings: [],
+    videoAutopilotStates: [],
   };
 }

@@ -434,6 +434,8 @@ export interface VideoOrder {
   videoRuns: number;
   /** "simulador" = sem chave (teste gratuito, sem IA); "ia" = OpenAI + Veo. */
   engine: "simulador" | "ia";
+  /** Conduzido pelo atendimento automático: avatar e prévia são enviados sozinhos ao ficarem prontos. */
+  autopilot: boolean;
   error: string | null;
   createdBy: string | null;
   createdAt: string;
@@ -442,6 +444,47 @@ export interface VideoOrder {
   previewSentAt: string | null;
   paidAt: string | null;
   deliveredAt: string | null;
+}
+
+/** Atendimento automático dos vídeos: configuração da organização. */
+export interface VideoAutopilotSettings {
+  id: string;
+  orgId: string;
+  enabled: boolean;
+  /** "anuncio": só contato novo vindo de anúncio; "contato_novo": qualquer contato novo. */
+  trigger: "anuncio" | "contato_novo";
+  /** Responde só aos números de teste (WHATSAPP_NUMEROS_TESTE). */
+  testOnly: boolean;
+  priceText: string;
+  pixKey: string;
+  /** Áudio gravado: "Seria sobre os vídeos de Uber ou de táxi?" */
+  audioAskAssetId: string | null;
+  /** Áudio gravado: "Vamos precisar apenas de uma foto sua e das informações do seu atendimento." */
+  audioPhotoAssetId: string | null;
+  updatedBy: string | null;
+  updatedAt: string;
+}
+
+export type AutopilotStage = "perguntou_modalidade" | "pediu_foto" | "roteiro" | "avatar" | "video" | "finalizado" | "humano";
+/** Andamento do atendimento automático numa conversa. */
+export interface VideoAutopilotState {
+  id: string;
+  orgId: string;
+  conversationId: string;
+  clientId: string;
+  stage: AutopilotStage;
+  modality: VideoModality | null;
+  /** Informações do atendimento que o cliente escreveu (base da fala e do nome no vídeo). */
+  info: string;
+  photoAssetId: string | null;
+  /** Roteiro enviado ao cliente para aprovar antes do avatar. */
+  draft: { driverName: string; driverGender: "masculino" | "feminino"; city: string; speech: string; contactPhone: string } | null;
+  orderId: string | null;
+  /** Respostas que o robô não entendeu: na terceira, passa para uma pessoa. */
+  retries: number;
+  note: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface Database {
@@ -471,7 +514,9 @@ export interface Database {
   aiKnowledge: AiKnowledgeRecord[];
   aiSuggestions: AiSuggestionRecord[];
   videoOrders: VideoOrder[];
+  videoAutopilotSettings: VideoAutopilotSettings[];
+  videoAutopilotStates: VideoAutopilotState[];
 }
 
 /** Coleções acrescentadas depois da versão 1 da base demo (criadas vazias em bases antigas). */
-export const LATER_COLLECTIONS = ["mediaAssets", "receipts", "sales", "financeEntries", "productionOrders", "guardianEvents", "aiKnowledge", "aiSuggestions", "videoOrders"] as const;
+export const LATER_COLLECTIONS = ["mediaAssets", "receipts", "sales", "financeEntries", "productionOrders", "guardianEvents", "aiKnowledge", "aiSuggestions", "videoOrders", "videoAutopilotSettings", "videoAutopilotStates"] as const;
