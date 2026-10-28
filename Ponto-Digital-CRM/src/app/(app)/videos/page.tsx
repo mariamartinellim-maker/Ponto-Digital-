@@ -94,7 +94,11 @@ export default async function VideosPage() {
         title="Vídeos com avatar"
         description="Foto do cliente → avatar → aprovação → vídeo de 10 s → prévia com marca d'água → pagamento → vídeo final."
       />
-      {usage.engine === "simulador" ? (
+      {usage.enabled && usage.avatar !== usage.video ? (
+        <Notice tone="brand" title={usage.avatar ? "Avatar pela IA (OpenAI) · vídeo no simulador" : "Vídeo pela IA (Veo) · avatar no simulador"}>
+          Falta {usage.avatar ? "GOOGLE_AI_API_KEY" : "OPENAI_API_KEY"} no Render para a outra etapa. {usage.used} de {usage.limit} gerações pagas usadas neste mês.
+        </Notice>
+      ) : usage.engine === "simulador" ? (
         <Notice tone="amber" title="Modo simulador (sem custo)">
           {!usage.enabled
             ? "A automação paga está desligada (VIDEO_AUTOMACAO). "

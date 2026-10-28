@@ -33,9 +33,11 @@ export const SYSTEM = (orgId: string): Actor => ({ system: true, orgId });
 const userOf = (a: Actor): SessionUser | null => ("system" in a ? null : a);
 const accessOf = (a: Actor): Access | undefined => ("system" in a ? SERVER : undefined);
 
-export function videoEngine(): VideoOrder["engine"] {
+/** Motor de cada etapa: a IA só com VIDEO_AUTOMACAO ligada e a chave daquela etapa (avatar = OpenAI, vídeo = Google). */
+export function videoEngine(step?: "gerar_avatar" | "gerar_video"): VideoOrder["engine"] {
   const p = providersConfigured();
-  return env().VIDEO_AUTOMACAO && p.avatar && p.video ? "ia" : "simulador";
+  const ok = step === "gerar_avatar" ? p.avatar : step === "gerar_video" ? p.video : p.avatar && p.video;
+  return env().VIDEO_AUTOMACAO && ok ? "ia" : "simulador";
 }
 
 /** Gerações pagas (avatar + vídeo pela IA) usadas no mês, para o teto de gasto. */
@@ -209,7 +211,7 @@ export async function startGeneration(a: Actor, id: string, action: "gerar_avata
   const field = RUN_FIELD[action];
   if (o[field] >= e.VIDEO_MAX_REFACOES) return fail(`Limite de ${e.VIDEO_MAX_REFACOES} tentativas desta etapa no pedido. Crie um pedido novo se precisar.`);
   // O motor é decidido a cada geração: ligar as chaves no meio do pedido passa a usar a IA dali em diante.
-  const engine = videoEngine();
+  const engine = videoEngine(action);
   if (engine === "ia" && (await paidRunsThisMonth(a.orgId)) >= e.VIDEO_LIMITE_MES) {
     return fail(`Limite do mês atingido (${e.VIDEO_LIMITE_MES} gerações pagas). Aumente VIDEO_LIMITE_MES no Render se quiser continuar.`);
   }
