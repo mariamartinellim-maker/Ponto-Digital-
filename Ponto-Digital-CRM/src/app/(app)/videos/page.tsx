@@ -169,9 +169,17 @@ export default async function VideosPage() {
                 <Field label="Valor do vídeo" htmlFor="priceText" hint='Como aparece na mensagem, ex.: "R$ 50"'>
                   <Input id="priceText" name="priceText" maxLength={300} defaultValue={settings?.priceText ?? ""} />
                 </Field>
-                <Field label="Chave Pix" htmlFor="pixKey">
+                <Field label="Chave Pix" htmlFor="pixKey" hint="CPF, CNPJ, e-mail, +55 com DDD ou chave aleatória">
                   <Input id="pixKey" name="pixKey" maxLength={120} defaultValue={settings?.pixKey ?? ""} />
                 </Field>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="Titular da chave" htmlFor="pixHolder" hint="Aparece no cartão Pix">
+                    <Input id="pixHolder" name="pixHolder" maxLength={60} defaultValue={settings?.pixHolder ?? ""} />
+                  </Field>
+                  <Field label="Cidade do titular" htmlFor="pixCity">
+                    <Input id="pixCity" name="pixCity" maxLength={40} defaultValue={settings?.pixCity ?? "Cuiaba"} />
+                  </Field>
+                </div>
                 <Field label='Áudio "Uber ou táxi?"' htmlFor="audioAskAssetId" hint="Da biblioteca de mídias. Sem áudio, vai por escrito.">
                   <Select id="audioAskAssetId" name="audioAskAssetId" defaultValue={settings?.audioAskAssetId ?? ""}>
                     <option value="">Por escrito</option>

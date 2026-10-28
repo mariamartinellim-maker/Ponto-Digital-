@@ -175,7 +175,7 @@ async function avatarJob(o: VideoOrder) {
     const jpg = await toJpeg(raw.bytes, raw.mime);
     const saved = await store(o, jpg, "image/jpeg", `avatar-${o.number}-${o.avatarRuns}.jpg`, `Avatar nº ${o.number}`, "avatar");
     const ready = await setStatus(o.orgId, o.id, "avatar_pronto", { avatarAssetId: saved.id, error: null });
-    if (ready?.autopilot) await (await import("./autopilot")).onAvatarReady(ready);
+    if (ready?.autopilot) await (await import("./autopilot")).onAvatarReady(ready).catch((e: unknown) => console.error("[robô] avatar pronto:", (e as Error).message));
   } catch (e) {
     console.error("[video] avatar", o.id, (e as Error).message);
     await setStatus(o.orgId, o.id, "falhou", { error: friendly(e) }).catch(() => {});
@@ -191,7 +191,7 @@ async function videoJob(o: VideoOrder) {
     const v = await store(o, clean, "video/mp4", `video-${o.number}-${o.videoRuns}.mp4`, `Vídeo nº ${o.number} (sem marca)`, "final");
     const p = await store(o, preview, "video/mp4", `previa-${o.number}-${o.videoRuns}.mp4`, `Prévia nº ${o.number} (com marca d'água)`, "previa");
     const ready = await setStatus(o.orgId, o.id, "video_pronto", { videoAssetId: v.id, previewAssetId: p.id, error: null });
-    if (ready?.autopilot) await (await import("./autopilot")).onVideoReady(ready);
+    if (ready?.autopilot) await (await import("./autopilot")).onVideoReady(ready).catch((e: unknown) => console.error("[robô] vídeo pronto:", (e as Error).message));
   } catch (e) {
     console.error("[video] vídeo", o.id, (e as Error).message);
     await setStatus(o.orgId, o.id, "falhou", { error: friendly(e) }).catch(() => {});

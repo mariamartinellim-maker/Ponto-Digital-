@@ -20,7 +20,10 @@ import { toVoiceNote } from "./ffmpeg";
  * ou pelo próprio sistema (robô, sem usuário logado; a mensagem fica com origem "sistema").
  * Sempre passa pelas travas do WhatsApp: simulação, ambiente de teste e números de teste.
  */
-export type Outgoing = { kind: "text"; body: string } | { kind: "asset"; assetId: string; caption?: string };
+export type Outgoing =
+  | { kind: "text"; body: string }
+  | { kind: "asset"; assetId: string; caption?: string }
+  | { kind: "pix"; summary: string; referenceId: string; itemName: string; amountCents: number; code: string; merchantName: string; key: string; keyType: string };
 type Result<T> = { ok: true; value: T } | { ok: false; error: string };
 const fail = (error: string): { ok: false; error: string } => ({ ok: false, error });
 
@@ -79,6 +82,8 @@ export async function sendToConversation(orgId: string, convId: string, out: Out
     media = { type: asset.type, mime: voice ? "audio/ogg" : asset.mime, filename: asset.filename, assetId: asset.id, ...(voice ? { voice: true } : {}), ...(out.caption ? { caption: out.caption } : {}) };
     if (decision.mode === "live") file = voice ? { bytes: await toVoiceNote(bytes), mime: "audio/ogg", filename: "audio.ogg" } : { bytes, mime: asset.mime, filename: asset.filename };
     body = `[${LABEL[asset.type]}]${out.caption ? " " + out.caption : voice ? " Mensagem de voz" : ""}`.slice(0, 4096);
+  } else if (out.kind === "pix") {
+    body = out.summary.slice(0, 4096);
   } else {
     body = out.body.slice(0, 4096);
   }
@@ -97,6 +102,9 @@ export async function sendToConversation(orgId: string, convId: string, out: Out
       }
       const type = media.type === "image" ? "image" : media.type === "audio" ? "audio" : "video";
       r = await sendWhatsApp({ type: "media", to: target.phone, media: type, mediaId: media.id, caption: out.kind === "asset" ? out.caption : undefined }, { orgId });
+    } else if (out.kind === "pix") {
+      const { summary, ...pix } = out;
+      r = await sendWhatsApp({ type: "pix", to: target.phone, body: summary, ...pix }, { orgId });
     } else {
       r = await sendWhatsApp({ type: "text", to: target.phone, body }, { orgId });
     }

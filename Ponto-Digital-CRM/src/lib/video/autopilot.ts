@@ -1,6 +1,6 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
-import { analyzeReceipt } from "../ai/receipt";
+import { analyzeReceipt, parseBrlToCents } from "../ai/receipt";
 import { getOne, insertOne, listAll, updateOne, type Access } from "../data/collections";
 import { audit, findClientByPhone } from "../data/repo";
 import { getDb, mutate } from "../data/store";
@@ -8,6 +8,7 @@ import type { AutopilotStage, VideoAutopilotSettings, VideoAutopilotState, Video
 import { env, testNumbers } from "../env";
 import { saveAsset } from "../media/storage";
 import { normalizePhone, phoneDedupKey } from "../phone";
+import { normalizePixKey, pixCopyPaste } from "../pix";
 import { supabaseAdmin } from "../supabase/admin";
 import { isSupabase } from "../supabase/server";
 import { waCredentials } from "../whatsapp/client";
@@ -76,13 +77,39 @@ export function scriptText(d: OrderDraft) {
   return [`Olha o roteiro do seu vídeo:`, "", `*Fala:* "${d.speech}"`, `*Nome no final:* ${d.driverName}`, ...(d.contactPhone ? [`*WhatsApp:* ${formatBrPhone(d.contactPhone)}`] : [])].join("\n");
 }
 
-/** Pagamento em 3 mensagens: a chave Pix vai sozinha, para o cliente copiar com um toque (como a equipe faz). */
-export function paymentMessages(s: Pick<VideoAutopilotSettings, "priceText" | "pixKey">) {
-  return [`Pra liberar o vídeo sem a marca d'água fica ${s.priceText.trim()}. Segue a chave Pix:`, s.pixKey.trim(), "Me manda o comprovante aqui que já te envio"];
-}
+export const paymentIntro = (s: Pick<VideoAutopilotSettings, "priceText">) => `Pra liberar o vídeo sem a marca d'água fica ${s.priceText.trim()}. Segue a chave Pix:`;
+export const PAYMENT_END = "Me manda o comprovante aqui que já te envio";
+const canCharge = (s: VideoAutopilotSettings | null): s is VideoAutopilotSettings => Boolean(s?.priceText.trim() && s.pixKey.trim());
 
-async function sayAll(t: Target, orgId: string, bodies: string[]) {
-  for (const body of bodies) await say(t, orgId, { kind: "text", body });
+/**
+ * Pagamento: valor, cartão de cobrança Pix do WhatsApp (titular + botão "copiar") e pedido do comprovante.
+ * Sem titular ou se a Meta recusar o cartão, a chave vai sozinha numa mensagem, para copiar com um toque.
+ */
+async function sendPayment(orgId: string, convId: string, s: VideoAutopilotSettings, orderNumber: number | null) {
+  const send = (out: Outgoing) => sendToConversation(orgId, convId, out, null);
+  await send({ kind: "text", body: paymentIntro(s) });
+  const key = normalizePixKey(s.pixKey);
+  const cents = parseBrlToCents(s.priceText);
+  let card = false;
+  if (key && cents && s.pixHolder.trim()) {
+    const ref = `video${orderNumber ?? Date.now()}`;
+    const code = pixCopyPaste({ key: key.key, name: s.pixHolder, city: s.pixCity || "Cuiaba", amountCents: cents, txid: ref });
+    const r = await send({
+      kind: "pix",
+      summary: `[Pix] ${s.pixHolder.trim()} · ${key.type}: ${s.pixKey.trim()} · ${s.priceText.trim()} (copiar chave Pix)`,
+      referenceId: ref,
+      itemName: "Vídeo com avatar",
+      amountCents: cents,
+      code,
+      merchantName: s.pixHolder.trim().slice(0, 60),
+      key: key.key,
+      keyType: key.type,
+    });
+    card = r.ok;
+    if (!r.ok) console.warn("[robô] cartão Pix recusado, enviando a chave em texto:", r.error);
+  }
+  if (!card) await send({ kind: "text", body: s.pixKey.trim() });
+  await send({ kind: "text", body: PAYMENT_END });
 }
 
 // ---------------------------------------------------------------------------
@@ -405,14 +432,14 @@ async function orderStep(st: VideoAutopilotState, s: VideoAutopilotSettings, t: 
     await say(t, st.orgId, { kind: "text", body: TEXTS.animating });
     return;
   }
-  if (r.intent === "aprovado" && s.priceText && s.pixKey) {
-    await sayAll(t, st.orgId, paymentMessages(s));
+  if (r.intent === "aprovado" && canCharge(s)) {
+    await sendPayment(st.orgId, t.conversationId, s, order.number);
     return;
   }
   if (st.retries >= 2) return handoff(st, t, `Resposta não entendida na etapa ${about}.`);
   await patchState(st, { retries: st.retries + 1 });
   if (about === "avatar") await say(t, st.orgId, { kind: "text", body: TEXTS.approveHint });
-  else if (s.priceText && s.pixKey) await sayAll(t, st.orgId, paymentMessages(s));
+  else if (canCharge(s)) await sendPayment(st.orgId, t.conversationId, s, order.number);
   else await say(t, st.orgId, { kind: "text", body: TEXTS.handoff });
 }
 
@@ -458,8 +485,8 @@ export async function onVideoReady(o: VideoOrder) {
   const r = await sendStep(SYSTEM(o.orgId), o.id, "enviar_previa");
   if (!r.ok) return patchState(st, { stage: "humano", note: `Vídeo pronto, mas não enviado: ${r.error}`.slice(0, 300) });
   const s = await getSettings(o.orgId);
-  if (s?.priceText && s.pixKey) {
-    for (const body of paymentMessages(s)) await sendToConversation(o.orgId, st.conversationId, { kind: "text", body }, null);
+  if (canCharge(s)) {
+    await sendPayment(o.orgId, st.conversationId, s, o.number);
   } else {
     await patchState(st, { stage: "humano", note: "Prévia enviada. Falta configurar valor e chave Pix no robô: a equipe precisa passar o pagamento." });
   }

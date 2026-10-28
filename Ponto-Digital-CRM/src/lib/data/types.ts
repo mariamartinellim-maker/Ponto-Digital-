@@ -457,6 +457,9 @@ export interface VideoAutopilotSettings {
   testOnly: boolean;
   priceText: string;
   pixKey: string;
+  /** Titular e cidade da chave (cartão de cobrança Pix). */
+  pixHolder: string;
+  pixCity: string;
   /** Áudio gravado: "Seria sobre os vídeos de Uber ou de táxi?" */
   audioAskAssetId: string | null;
   /** Áudio gravado: "Vamos precisar apenas de uma foto sua e das informações do seu atendimento." */

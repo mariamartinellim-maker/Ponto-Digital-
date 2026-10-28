@@ -5,6 +5,7 @@ import { z } from "zod";
 import { authorize } from "@/lib/auth/session";
 import { getOne } from "@/lib/data/collections";
 import { audit } from "@/lib/data/repo";
+import { normalizePixKey } from "@/lib/pix";
 import { saveSettings, setConversationStage } from "@/lib/video/autopilot";
 import { cancelOrder, confirmPayment, createVideoOrder, sendStep, startGeneration } from "@/lib/video/service";
 
@@ -70,6 +71,8 @@ const settingsSchema = z.object({
   testOnly: z.boolean(),
   priceText: z.string().trim().max(300),
   pixKey: z.string().trim().max(120),
+  pixHolder: z.string().trim().max(60),
+  pixCity: z.string().trim().max(40),
   audioAskAssetId: z.string().uuid().nullable(),
   audioPhotoAssetId: z.string().uuid().nullable(),
 });
@@ -85,12 +88,15 @@ export async function saveAutopilotAction(_: VideoState, formData: FormData): Pr
     testOnly: formData.get("testOnly") === "on",
     priceText: String(formData.get("priceText") ?? ""),
     pixKey: String(formData.get("pixKey") ?? ""),
+    pixHolder: String(formData.get("pixHolder") ?? ""),
+    pixCity: String(formData.get("pixCity") ?? "") || "Cuiaba",
     audioAskAssetId: audio("audioAskAssetId"),
     audioPhotoAssetId: audio("audioPhotoAssetId"),
   });
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
   const s = parsed.data;
   if (s.enabled && (!s.priceText || !s.pixKey)) return { error: "Para ligar, informe o valor e a chave Pix (vão na mensagem de pagamento)." };
+  if (s.pixKey && !normalizePixKey(s.pixKey)) return { error: "Chave Pix inválida (use CPF, CNPJ, e-mail, +55 com DDD ou chave aleatória)." };
   for (const id of [s.audioAskAssetId, s.audioPhotoAssetId]) {
     if (id && (await getOne(user.orgId, "mediaAssets", id))?.type !== "audio") return { error: "Escolha um áudio da biblioteca." };
   }

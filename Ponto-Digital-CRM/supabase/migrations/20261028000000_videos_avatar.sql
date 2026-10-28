@@ -104,6 +104,9 @@ create table if not exists public.video_autopilot_settings (
   test_only boolean not null default true,
   price_text text not null default '' check (length(price_text) <= 300),
   pix_key text not null default '' check (length(pix_key) <= 120),
+  -- Titular e cidade da chave: aparecem no cartão de cobrança Pix do WhatsApp.
+  pix_holder text not null default '' check (length(pix_holder) <= 60),
+  pix_city text not null default 'Cuiaba' check (length(pix_city) <= 40),
   audio_ask_asset_id uuid,
   audio_photo_asset_id uuid,
   updated_by uuid,

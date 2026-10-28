@@ -7,12 +7,14 @@ import { applyWhatsAppEvents } from "@/lib/data/repo";
 import { getDb } from "@/lib/data/store";
 import type { VideoOrder } from "@/lib/data/types";
 import { classifyReply, detectModality, fallbackDraft, keywordIntent } from "@/lib/video/brain";
+import { crc16, normalizePixKey, pixCopyPaste } from "@/lib/pix";
 import { ffmpegPath } from "@/lib/video/ffmpeg";
 import { greeting, runAutopilot, saveSettings, TAG_DONE, TAG_NEW, TEXTS } from "@/lib/video/autopilot";
 import type { WaEnvelope, WaMedia } from "@/lib/whatsapp/events";
 
 // Comprovante: a leitura pela IA é simulada aqui (nos testes não há chave nem chamadas externas).
-vi.mock("@/lib/ai/receipt", () => ({
+vi.mock("@/lib/ai/receipt", async (orig) => ({
+  ...(await orig<typeof import("@/lib/ai/receipt")>()),
   analyzeReceipt: vi.fn(async (_bytes: Uint8Array, mime: string) => ({
     ok: true,
     model: "teste",
@@ -29,6 +31,20 @@ vi.mock("@/lib/env", async (orig) => {
 
 const JPG = execFileSync(ffmpegPath(), ["-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc=size=360x640:rate=1", "-frames:v", "1", "-f", "mjpeg", "pipe:1"]);
 const PNG = execFileSync(ffmpegPath(), ["-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "color=c=white:s=200x300", "-frames:v", "1", "-f", "image2", "-c:v", "png", "pipe:1"]);
+
+describe("Pix copia e cola", () => {
+  it("gera o BR Code oficial (CRC do exemplo do Banco Central) e reconhece o tipo da chave", () => {
+    expect(crc16("00020126580014br.gov.bcb.pix0136123e4567-e12b-12d1-a456-4266554400005204000053039865802BR5913Fulano de Tal6008BRASILIA62070503***6304")).toBe("1D3D");
+    expect(normalizePixKey("082.454.761-61")).toEqual({ key: "08245476161", type: "CPF" });
+    expect(normalizePixKey("Pix@Ponto.com")).toEqual({ key: "pix@ponto.com", type: "EMAIL" });
+    expect(normalizePixKey("+55 65 99999-0000")).toEqual({ key: "+5565999990000", type: "PHONE" });
+    expect(normalizePixKey("123")).toBeNull();
+    const code = pixCopyPaste({ key: "08245476161", name: "Maria de Fátima Martineli", city: "Cuiabá", amountCents: 3500, txid: "video12" });
+    expect(code).toContain("0111082454761615204000053039865405" + "35.00");
+    expect(code).toContain("5925MARIA DE FATIMA MARTINELI6006CUIABA");
+    expect(code.slice(-4)).toBe(crc16(code.slice(0, -4)));
+  });
+});
 
 describe("cérebro do robô (sem IA)", () => {
   it("entende a modalidade e a resposta do cliente", async () => {
@@ -79,12 +95,13 @@ describe("atendimento automático completo (base em memória, simulador)", () =>
       if (o?.status === status) return o;
       await new Promise((r) => setTimeout(r, 250));
     }
-    throw new Error(`pedido não chegou em ${status}`);
+    const last = await order();
+    throw new Error(`pedido não chegou em ${status}: ${last?.status} ${last?.error ?? ""}`);
   };
 
   beforeAll(async () => {
     orgId = (await getDb()).organizations[0]!.id;
-    await saveSettings(orgId, "u", { enabled: true, trigger: "anuncio", testOnly: false, priceText: "R$ 50", pixKey: "pix@pontodigital.com", audioAskAssetId: null, audioPhotoAssetId: null });
+    await saveSettings(orgId, "u", { enabled: true, trigger: "anuncio", testOnly: false, priceText: "R$ 35", pixKey: "082.454.761-61", pixHolder: "Maria de Fatima Martineli", pixCity: "Cuiaba", audioAskAssetId: null, audioPhotoAssetId: null });
   });
   afterAll(async () => {
     await rm(path.join(process.cwd(), ".data", "arquivos", orgId), { recursive: true, force: true });
@@ -130,8 +147,12 @@ describe("atendimento automático completo (base em memória, simulador)", () =>
     for (let i = 0; i < 40 && !(await outTexts()).at(-1)?.includes("comprovante"); i++) await new Promise((r) => setTimeout(r, 100));
     texts = await outTexts();
     expect(texts.at(-4)).toMatch(/^\[vídeo\] Prontinho, essa é a prévia/);
-    // A chave Pix vai sozinha numa mensagem, para copiar com um toque.
-    expect(texts.slice(-3)).toEqual(["Pra liberar o vídeo sem a marca d'água fica R$ 50. Segue a chave Pix:", "pix@pontodigital.com", "Me manda o comprovante aqui que já te envio"]);
+    // Cartão de cobrança Pix (titular + botão copiar), como no WhatsApp Business.
+    expect(texts.slice(-3)).toEqual([
+      "Pra liberar o vídeo sem a marca d'água fica R$ 35. Segue a chave Pix:",
+      "[Pix] Maria de Fatima Martineli · CPF: 082.454.761-61 · R$ 35 (copiar chave Pix)",
+      "Me manda o comprovante aqui que já te envio",
+    ]);
 
     ai.key = "chave-de-teste";
     await send(inbound("[imagem]", { type: "image", id: "outra", mime: "image/jpeg" })); // foto qualquer não libera
